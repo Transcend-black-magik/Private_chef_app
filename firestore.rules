@@ -1,0 +1,196 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email
+        : "";
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isSignedInUsersOwnEmail() {
+      return signedIn() &&
+        request.auth.token.email is string &&
+        resource.data.email is string &&
+        request.auth.token.email == resource.data.email;
+    }
+
+    function matchesCurrentAccount(identifier) {
+      return signedIn() && (
+        identifier == request.auth.uid ||
+        (currentEmail() != "" && identifier == currentEmail())
+      );
+    }
+
+    function participantListHasCurrentAccount(participantIds) {
+      return participantIds is list && (
+        request.auth.uid in participantIds ||
+        (currentEmail() != "" && currentEmail() in participantIds)
+      );
+    }
+
+    function bookingExplorerMutableKeys() {
+      return [
+        "dishSummary",
+        "serviceDateLabel",
+        "guestCount",
+        "areaLabel",
+        "serviceMode",
+        "serviceKind",
+        "needsMarketTrip",
+        "ingredientBudgetAmount",
+        "notes",
+        "subtotalAmount",
+        "explorerFeeAmount",
+        "cookFeeAmount",
+        "platformFeeAmount",
+        "totalAmount",
+        "payoutAmount",
+        "latestOfferAmount",
+        "latestOfferBy",
+        "latestOfferNote",
+        "negotiationOpen",
+        "cancellationReason",
+        "fundsReleaseStatus",
+        "trustReleaseConfirmed",
+        "status",
+        "updatedAt"
+      ];
+    }
+
+    function bookingCookMutableKeys() {
+      return [
+        "subtotalAmount",
+        "explorerFeeAmount",
+        "cookFeeAmount",
+        "platformFeeAmount",
+        "totalAmount",
+        "payoutAmount",
+        "latestOfferAmount",
+        "latestOfferBy",
+        "latestOfferNote",
+        "negotiationOpen",
+        "cancellationReason",
+        "status",
+        "updatedAt"
+      ];
+    }
+
+    function chatThreadMutableKeys() {
+      return [
+        "bookingStatus",
+        "lastMessageText",
+        "lastMessageSenderId",
+        "lastMessageAt",
+        "updatedAt",
+        "messageCount",
+        "unreadCountBy",
+        "lastReadAtBy",
+        "isBlocked",
+        "archivedBy",
+        "hiddenBy"
+      ];
+    }
+
+    function isParticipant(data) {
+      return signedIn() && (
+        matchesCurrentAccount(data.explorerId) ||
+        matchesCurrentAccount(data.cookId) ||
+        participantListHasCurrentAccount(data.participantIds)
+      );
+    }
+
+    match /users/{userId} {
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow read: if signedIn() && (
+        isOwner(userId) ||
+        isSignedInUsersOwnEmail() ||
+        (
+          resource.data.role == "cook" &&
+          resource.data.profileComplete == true
+        )
+      );
+    }
+
+    match /cookVerificationQueue/{userId} {
+      allow create, update, read: if isOwner(userId);
+    }
+
+    match /bookingRequests/{bookingId} {
+      allow create: if signedIn() &&
+        matchesCurrentAccount(request.resource.data.explorerId);
+      allow read: if isParticipant(resource.data);
+      allow update: if signedIn() && (
+        (
+          matchesCurrentAccount(resource.data.explorerId) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(bookingExplorerMutableKeys())
+        ) ||
+        (
+          matchesCurrentAccount(resource.data.cookId) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(bookingCookMutableKeys())
+        )
+      );
+    }
+
+    match /chatThreads/{threadId} {
+      allow create: if signedIn() &&
+        matchesCurrentAccount(request.resource.data.explorerId) &&
+        participantListHasCurrentAccount(request.resource.data.participantIds);
+      allow read: if isParticipant(resource.data);
+      allow update: if isParticipant(resource.data) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(chatThreadMutableKeys());
+
+      match /messages/{messageId} {
+        allow create: if signedIn() &&
+          participantListHasCurrentAccount(
+            get(/databases/$(database)/documents/chatThreads/$(threadId)).data.participantIds
+          ) &&
+          matchesCurrentAccount(request.resource.data.senderId);
+        allow read: if signedIn() &&
+          participantListHasCurrentAccount(
+            get(/databases/$(database)/documents/chatThreads/$(threadId)).data.participantIds
+          );
+      }
+    }
+
+    match /payments/{paymentId} {
+      allow create: if signedIn() && matchesCurrentAccount(request.resource.data.explorerId);
+      allow read: if isParticipant(resource.data);
+      allow update: if signedIn() &&
+        matchesCurrentAccount(resource.data.explorerId) &&
+        matchesCurrentAccount(request.resource.data.explorerId) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "status",
+          "provider",
+          "updatedAt",
+          "amount",
+          "subtotalAmount",
+          "ingredientBudgetAmount",
+          "explorerFeeAmount",
+          "cookFeeAmount",
+          "platformFeeAmount",
+          "payoutAmount",
+          "currencyCode"
+        ]);
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if signedIn();
+      allow read: if signedIn() && matchesCurrentAccount(resource.data.recipientId);
+      allow update: if signedIn() &&
+        matchesCurrentAccount(resource.data.recipientId) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "read"
+        ]);
+    }
+  }
+}

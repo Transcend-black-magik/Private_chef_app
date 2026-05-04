@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "840527461539",
+    "project_id": "cook-for-me-8002d",
+    "storage_bucket": "cook-for-me-8002d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:840527461539:android:65ea332bcf2c67b7f91316",
+        "android_client_info": {
+          "package_name": "com.tega.cookforme"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "840527461539-vv74pbtcbcl52mnsnks8i3b0vjvegbos.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhaCTM14bCZ3jszWXfzQoC0M7QYtUFasc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "840527461539-vv74pbtcbcl52mnsnks8i3b0vjvegbos.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "840527461539-t9p54f0uo80vurtke5jp256f7jhqm9e6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tega.cookforme"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
