@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import RoundedAvatar from "@/components/RoundedAvatar";
 import {
@@ -171,6 +172,22 @@ export default function ChatsScreen() {
       (right.lastMessageAt || "").localeCompare(left.lastMessageAt || ""),
     );
   }, [role, threads]);
+  const totalUnread = useMemo(
+    () =>
+      currentUser
+        ? visibleThreads.reduce((total, thread) => total + getThreadUnreadCount(thread, currentUser), 0)
+        : 0,
+    [currentUser, visibleThreads],
+  );
+  const onlineCount = useMemo(
+    () =>
+      visibleThreads.filter((thread) => {
+        const partnerIdentifier = role === "cook" ? thread.explorerId : thread.cookId;
+        const resolvedPartner = partnerMap[partnerIdentifier];
+        return presenceMap[resolvedPartner?.id || partnerIdentifier]?.isOnline;
+      }).length,
+    [partnerMap, presenceMap, role, visibleThreads],
+  );
 
   return (
     <View style={styles.screen}>
@@ -180,6 +197,7 @@ export default function ChatsScreen() {
                 bounces={false}
                 overScrollMode="never">
       <View style={styles.headerRow}>
+        <View style={styles.headerGlow} />
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>Messages</Text>
           <Text style={styles.title}>Chats</Text>
@@ -190,7 +208,33 @@ export default function ChatsScreen() {
         </View>
       </View>
 
+      <View style={styles.metricGrid}>
+        <View style={styles.metricCard}>
+          <Ionicons name="chatbubbles-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{visibleThreads.length}</Text>
+          <Text style={styles.metricLabel}>Threads</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="mail-unread-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{totalUnread}</Text>
+          <Text style={styles.metricLabel}>Unread</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="radio-button-on-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{onlineCount}</Text>
+          <Text style={styles.metricLabel}>Online</Text>
+        </View>
+      </View>
+
       <View style={styles.stack}>
+        {!visibleThreads.length ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="chatbox-ellipses-outline" size={24} color={activeTheme.textMuted} />
+            <Text style={styles.emptyTitle}>No chats yet</Text>
+            <Text style={styles.emptyBody}>Booking conversations and live service handoffs will appear here.</Text>
+          </View>
+        ) : null}
+
         {visibleThreads.map((thread) => {
           const partnerName = role === "cook" ? thread.explorerName : thread.cookName;
           const partnerIdentifier = role === "cook" ? thread.explorerId : thread.cookId;
@@ -297,7 +341,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       paddingBottom: 120,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: isWideWeb ? 940 : undefined,
       alignSelf: "center",
     },
     headerRow: {
@@ -306,32 +349,83 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       borderRadius: 34,
       padding: theme.spacing.lg,
-      backgroundColor: activeTheme.surface,
+      minHeight: isWideWeb ? 300 : 250,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: activeTheme.primaryDark,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
+      marginHorizontal: -theme.spacing.lg,
+      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+    },
+    headerGlow: {
+      position: "absolute",
+      right: -60,
+      bottom: -80,
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      backgroundColor: "rgba(255,255,255,0.14)",
     },
     headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
-    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
+    kicker: { color: "#FFE0BD", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: "#FFFFFF", fontSize: isWideWeb ? 52 : 38, lineHeight: isWideWeb ? 58 : 44, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
       borderRadius: 17,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.16)",
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: "rgba(255,255,255,0.18)",
       paddingHorizontal: 10,
     },
-    headerPillText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
+    headerPillText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+    metricGrid: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: -44,
+    },
+    metricCard: {
+      flex: 1,
+      minHeight: 112,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
+    },
+    metricValue: { color: activeTheme.text, fontSize: 26, fontWeight: "900" },
+    metricLabel: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
     stack: { gap: theme.spacing.md },
+    emptyCard: {
+      minHeight: 180,
+      borderRadius: 28,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      padding: theme.spacing.lg,
+    },
+    emptyTitle: { color: activeTheme.text, fontSize: 18, fontWeight: "900" },
+    emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, textAlign: "center" },
     chatCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -339,7 +433,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: 28,
+      borderRadius: 26,
       padding: theme.spacing.lg,
       minHeight: 96,
       shadowColor: activeTheme.shadow,

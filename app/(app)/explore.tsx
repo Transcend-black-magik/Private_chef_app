@@ -79,6 +79,7 @@ export default function ExploreScreen() {
 
   const popularCooks = useMemo(() => sortCooks(directory, "popular"), [directory]);
   const featuredCook = popularCooks[0] ?? null;
+  const featuredCooks = popularCooks.slice(0, 4);
   const quickMatches = popularCooks.slice(0, 5);
   const previewCook = featuredCook ?? {
     id: "preview",
@@ -281,48 +282,60 @@ export default function ExploreScreen() {
 
       <View style={styles.sectionHeader}>
         <View>
-          <Text style={styles.sectionTitle}>Featured cook</Text>
-          <Text style={styles.sectionSubtitle}>A strong match from today&apos;s trusted profiles.</Text>
+          <Text style={styles.sectionTitle}>Featured cooks</Text>
+          <Text style={styles.sectionSubtitle}>Strong matches from today&apos;s trusted profiles.</Text>
         </View>
       </View>
 
-      <Pressable
-        style={styles.featureCard}
-        onPress={() =>
-          featuredCook
-            ? router.push({ pathname: "/cooks/[id]", params: { id: featuredCook.id } })
-            : router.push("/search")
-        }
+      <Animated.ScrollView
+        horizontal
+        style={styles.edgeCarousel}
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.featureRow}
       >
-        <Image source={heroFoodImages.jollof} style={styles.featureImage} contentFit="cover" />
-        <View style={styles.featureShade} />
-        <View style={styles.featureTop}>
-          <View style={styles.ratingPill}>
-            <Ionicons name="star" size={14} color="#FFCA45" />
-            <Text style={styles.ratingText}>4.9</Text>
-          </View>
-          <Pressable style={styles.heartButton}>
-            <Ionicons name="heart-outline" size={19} color="#FFFFFF" />
+        {(featuredCooks.length ? featuredCooks : [previewCook]).map((cook, index) => (
+          <Pressable
+            key={cook.id}
+            style={styles.featureCard}
+            onPress={() =>
+              cook.id === "preview"
+                ? router.push("/search")
+                : router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
+            }
+          >
+            <Image source={getCookImage(index + cook.name.length)} style={styles.featureImage} contentFit="cover" />
+            <View style={styles.featureShade} />
+            <View style={styles.featureTop}>
+              <View style={styles.ratingPill}>
+                <Ionicons name="star" size={14} color="#FFCA45" />
+                <Text style={styles.ratingText}>4.{9 - (index % 3)}</Text>
+              </View>
+              <View style={styles.heartButton}>
+                <Ionicons name="heart-outline" size={19} color="#FFFFFF" />
+              </View>
+            </View>
+            <View style={styles.featureBottom}>
+              <Text style={styles.featureEyebrow}>{index === 0 ? "Tonight's strong match" : "Trusted profile"}</Text>
+              <Text numberOfLines={1} style={styles.featureTitle}>{cook.name}</Text>
+              <Text numberOfLines={2} style={styles.featureBody}>{cook.headline}</Text>
+              <View style={styles.featureMetaRow}>
+                <View style={styles.featureMeta}>
+                  <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
+                  <Text style={styles.featureMetaText}>
+                    {cook.verified ? "Verified" : "Reviewing"}
+                  </Text>
+                </View>
+                <View style={styles.featureMeta}>
+                  <Ionicons name="location" size={14} color="#FFFFFF" />
+                  <Text numberOfLines={1} style={styles.featureMetaText}>{cook.location}</Text>
+                </View>
+              </View>
+            </View>
           </Pressable>
-        </View>
-        <View style={styles.featureBottom}>
-          <Text style={styles.featureEyebrow}>Tonight&apos;s strong match</Text>
-          <Text style={styles.featureTitle}>{previewCook.name}</Text>
-          <Text numberOfLines={2} style={styles.featureBody}>{previewCook.headline}</Text>
-          <View style={styles.featureMetaRow}>
-            <View style={styles.featureMeta}>
-              <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
-              <Text style={styles.featureMetaText}>
-                {previewCook.verified ? "Verified" : "Reviewing"}
-              </Text>
-            </View>
-            <View style={styles.featureMeta}>
-              <Ionicons name="location" size={14} color="#FFFFFF" />
-              <Text style={styles.featureMetaText}>{previewCook.location}</Text>
-            </View>
-          </View>
-        </View>
-      </Pressable>
+        ))}
+      </Animated.ScrollView>
 
       <View style={styles.sectionHeader}>
         <View>
@@ -769,6 +782,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     categoryText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
     featureCard: {
+      width: isWideWeb ? 360 : 284,
       height: isWideWeb ? 460 : 360,
       borderRadius: 34,
       overflow: "hidden",
@@ -776,6 +790,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       padding: theme.spacing.lg,
       justifyContent: "space-between",
     },
+    featureRow: { gap: 14, paddingHorizontal: 0 },
     featureImage: { ...StyleSheet.absoluteFillObject },
     featureShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
     featureTop: {

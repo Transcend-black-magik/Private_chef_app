@@ -162,6 +162,7 @@ export default function RequestsScreen() {
                 bounces={false}
                 overScrollMode="never">
       <View style={styles.headerRow}>
+        <View style={styles.headerGlow} />
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>Cook workspace</Text>
           <Text style={styles.title}>Requests</Text>
@@ -172,8 +173,26 @@ export default function RequestsScreen() {
             <Text style={styles.headerPillText}>{needsReplyCount}</Text>
           </View>
           <Pressable style={styles.binButton} onPress={() => setShowCancelled((value) => !value)}>
-            <Ionicons name={showCancelled ? "archive-outline" : "trash-outline"} size={18} color={activeTheme.text} />
+            <Ionicons name={showCancelled ? "archive-outline" : "trash-outline"} size={18} color="#FFFFFF" />
           </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.metricGrid}>
+        <View style={styles.metricCard}>
+          <Ionicons name="mail-unread-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{needsReplyCount}</Text>
+          <Text style={styles.metricLabel}>Needs reply</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="restaurant-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{activeRequests.length}</Text>
+          <Text style={styles.metricLabel}>Open</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="archive-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{archivedRequests.length}</Text>
+          <Text style={styles.metricLabel}>Archived</Text>
         </View>
       </View>
 
@@ -453,7 +472,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       paddingBottom: 120,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: isWideWeb ? 980 : undefined,
       alignSelf: "center",
     },
     headerRow: {
@@ -462,42 +480,80 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       borderRadius: 34,
       padding: theme.spacing.lg,
-      backgroundColor: activeTheme.surface,
+      minHeight: isWideWeb ? 300 : 250,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: activeTheme.primaryDark,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
+      marginHorizontal: -theme.spacing.lg,
+      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+    },
+    headerGlow: {
+      position: "absolute",
+      right: -60,
+      bottom: -80,
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      backgroundColor: "rgba(255,255,255,0.14)",
     },
     headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
+    kicker: { color: "#FFE0BD", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: "#FFFFFF", fontSize: isWideWeb ? 52 : 38, lineHeight: isWideWeb ? 58 : 44, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
       borderRadius: 17,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.16)",
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: "rgba(255,255,255,0.18)",
       paddingHorizontal: 10,
     },
-    headerPillText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
+    headerPillText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
     binButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    metricGrid: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: -44,
+    },
+    metricCard: {
+      flex: 1,
+      minHeight: 112,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
     },
+    metricValue: { color: activeTheme.text, fontSize: 26, fontWeight: "900" },
+    metricLabel: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
     stack: { gap: theme.spacing.md },
     emptyCard: {
       backgroundColor: activeTheme.surface,
@@ -511,7 +567,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
     groupCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: 28,
+      borderRadius: 30,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
@@ -532,7 +588,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       borderColor: activeTheme.border,
       padding: theme.spacing.md,
       gap: 12,
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: activeTheme.safeSurface,
     },
     requestHeaderButton: {
       flexDirection: "row",

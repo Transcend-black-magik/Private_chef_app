@@ -134,12 +134,15 @@ export default function MealItemScreen() {
       return;
     }
 
+    setShowMatchesSheet(false);
+    setHasMatched(false);
+    sheetOffsetY.current = 0;
+    sheetTranslateY.setValue(0);
     setIsCreatingBooking(true);
     setError("");
 
     try {
       const result = await createInstantMealBookingRequest({ cook, meal: item, deliveryMode });
-      setShowMatchesSheet(false);
       router.push({
         pathname: "/checkout/[bookingId]",
         params: { bookingId: result.bookingId, threadId: result.threadId, instant: "1" },
@@ -342,7 +345,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: 760,
       alignSelf: "center",
     },
     heroCard: {

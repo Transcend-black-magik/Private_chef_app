@@ -39,6 +39,12 @@ export default function ProfileScreen() {
   const [canVerifyCook, setCanVerifyCook] = useState(false);
   const [storedUser, setStoredUser] = useState<StoredUser | null>(null);
   const [shareReadReceipts, setShareReadReceipts] = useState(true);
+  const verificationLabel = verificationStatus || (role === "cook" ? "Pending review" : "Explorer ready");
+  const trustStats = [
+    { label: "Mode", value: role === "cook" ? "Cook" : "Explorer" },
+    { label: "Trust", value: verificationStatus ? verificationStatus : "Active" },
+    { label: "Region", value: countryName || "Set soon" },
+  ];
 
   useEffect(() => {
     async function loadSession() {
@@ -108,39 +114,77 @@ export default function ProfileScreen() {
       <View style={styles.profileHero}>
         <Image source={heroFoodImages.dessert} style={styles.profileHeroImage} contentFit="cover" />
         <View style={styles.profileHeroShade} />
-        <RoundedAvatar name={name} photoUrl={photoUrl} size={86} backgroundColor={activeTheme.primary} />
-        <Text style={styles.name}>{name}</Text>
-        <Text style={styles.role}>{role === "cook" ? "Cook account" : "Explorer account"}</Text>
-        <Text style={styles.phone}>{email || "No email added yet"}</Text>
-        <Text style={styles.phone}>{phone || "No phone added yet"}</Text>
+        <View style={styles.heroTopBar}>
+          <View style={styles.statusPill}>
+            <Ionicons name="shield-checkmark" size={15} color="#FFFFFF" />
+            <Text style={styles.statusPillText}>{verificationLabel}</Text>
+          </View>
+          <Pressable style={styles.heroIconButton} onPress={() => router.push("/complete-profile")}>
+            <Ionicons name="create-outline" size={19} color="#171713" />
+          </Pressable>
+        </View>
+        <View style={styles.heroIdentity}>
+          <RoundedAvatar name={name} photoUrl={photoUrl} size={92} backgroundColor={activeTheme.primary} />
+          <View style={styles.heroCopy}>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.role}>{role === "cook" ? "Cook account" : "Explorer account"}</Text>
+            <View style={styles.contactRow}>
+              <Ionicons name="mail-outline" size={15} color="rgba(255,255,255,0.78)" />
+              <Text numberOfLines={1} style={styles.phone}>{email || "No email added yet"}</Text>
+            </View>
+            <View style={styles.contactRow}>
+              <Ionicons name="call-outline" size={15} color="rgba(255,255,255,0.78)" />
+              <Text numberOfLines={1} style={styles.phone}>{phone || "No phone added yet"}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.statStrip}>
+          {trustStats.map((stat) => (
+            <View key={stat.label} style={styles.heroStat}>
+              <Text numberOfLines={1} style={styles.heroStatValue}>{stat.value}</Text>
+              <Text style={styles.heroStatLabel}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.verificationCard}>
-          <Text style={styles.verificationTitle}>Verification</Text>
-          <Text style={styles.verificationBody}>
-            {verificationStatus
-              ? `Status: ${verificationStatus}. ${countryName ? `Country: ${countryName}.` : ""}`
-              : "Your trust and safety review details will appear here."}
-          </Text>
-          {canVerifyCook ? (
-            <Pressable style={styles.verifyButton} onPress={() => router.push("/cook-verification")}>
-              <Text style={styles.verifyButtonText}>Verify identity</Text>
-            </Pressable>
-          ) : role === "cook" ? (
-            <View style={styles.verifyLockedPill}>
-              <Text style={styles.verifyLockedText}>
-                {verificationStatus ? "Verification locked" : "Verification not available"}
-              </Text>
+      <View style={styles.dashboardGrid}>
+        <View style={styles.infoCard}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionKicker}>Safety</Text>
+              <Text style={styles.sectionTitle}>Account trust</Text>
             </View>
-          ) : null}
-        </View>
-        <View style={styles.stack}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="finger-print-outline" size={20} color={activeTheme.primaryDark} />
+            </View>
+          </View>
+          <View style={styles.verificationCard}>
+            <Text style={styles.verificationTitle}>Verification</Text>
+            <Text style={styles.verificationBody}>
+              {verificationStatus
+                ? `Status: ${verificationStatus}. ${countryName ? `Country: ${countryName}.` : ""}`
+                : "Your trust and safety review details will appear here."}
+            </Text>
+            {canVerifyCook ? (
+              <Pressable style={styles.verifyButton} onPress={() => router.push("/cook-verification")}>
+                <Ionicons name="id-card-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.verifyButtonText}>Verify identity</Text>
+              </Pressable>
+            ) : role === "cook" ? (
+              <View style={styles.verifyLockedPill}>
+                <Text style={styles.verifyLockedText}>
+                  {verificationStatus ? "Verification locked" : "Verification not available"}
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Pressable style={styles.actionRow} onPress={() => void toggleReadReceipts()}>
             <View style={styles.actionLeft}>
-              <Ionicons name="checkmark-done-outline" size={18} color={activeTheme.text} />
-              <View>
+              <View style={styles.actionIcon}>
+                <Ionicons name="checkmark-done-outline" size={18} color={activeTheme.primaryDark} />
+              </View>
+              <View style={styles.actionCopy}>
                 <Text style={styles.actionText}>Read receipts</Text>
                 <Text style={styles.actionHint}>
                   {shareReadReceipts ? "Others can see when you read chats" : "Read status is private"}
@@ -151,51 +195,68 @@ export default function ProfileScreen() {
               <View style={[styles.toggleKnob, shareReadReceipts && styles.toggleKnobOn]} />
             </View>
           </Pressable>
-          {profileActions.map((item) => (
-            role === "cook" && item.title === "Saved cooks" ? null : (
-            <Pressable
-              key={item.title}
-              style={styles.actionRow}
-              onPress={() => router.push(item.route as never)}
-            >
-              <View style={styles.actionLeft}>
-                <Ionicons
-                  name={item.icon as keyof typeof Ionicons.glyphMap}
-                  size={18}
-                  color={activeTheme.text}
-                />
-                <Text style={styles.actionText}>{item.title}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={activeTheme.textMuted} />
-            </Pressable>
-            )
-          ))}
+        </View>
+
+        <View style={styles.infoCard}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionKicker}>Shortcuts</Text>
+              <Text style={styles.sectionTitle}>Profile tools</Text>
+            </View>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="grid-outline" size={20} color={activeTheme.primaryDark} />
+            </View>
+          </View>
+          <View style={styles.actionGrid}>
+            {profileActions.map((item) => (
+              role === "cook" && item.title === "Saved cooks" ? null : (
+              <Pressable
+                key={item.title}
+                style={styles.tileAction}
+                onPress={() => router.push(item.route as never)}
+              >
+                <View style={styles.tileIcon}>
+                  <Ionicons
+                    name={item.icon as keyof typeof Ionicons.glyphMap}
+                    size={20}
+                    color={activeTheme.primaryDark}
+                  />
+                </View>
+                <Text style={styles.tileText}>{item.title}</Text>
+                <Ionicons name="arrow-forward" size={16} color={activeTheme.textMuted} />
+              </Pressable>
+              )
+            ))}
+          </View>
         </View>
       </View>
 
       <View style={styles.companionCard}>
-        <Text style={styles.sectionTitle}>Companion mode</Text>
-        <Text style={styles.companionBody}>
-          Keep every recommendation, taste signal, and meal-decision tool together in one place.
-        </Text>
-        <View style={styles.stack}>
-          {companionActions.map((item) => (
-            <Pressable
-              key={item.title}
-              style={styles.actionRow}
-              onPress={() => router.push(item.route as never)}
-            >
-              <View style={styles.actionLeft}>
+        <View style={styles.companionImageWrap}>
+          <Image source={heroFoodImages.salad} style={styles.companionImage} contentFit="cover" />
+        </View>
+        <View style={styles.companionContent}>
+          <Text style={[styles.sectionKicker, styles.companionKicker]}>Companion mode</Text>
+          <Text style={styles.companionTitle}>Taste, planning, and food decisions in one place.</Text>
+          <Text style={styles.companionBody}>
+            Keep every recommendation, taste signal, and meal-decision tool together in one place.
+          </Text>
+          <View style={styles.companionActionRow}>
+            {companionActions.map((item) => (
+              <Pressable
+                key={item.title}
+                style={styles.companionAction}
+                onPress={() => router.push(item.route as never)}
+              >
                 <Ionicons
                   name={item.icon as keyof typeof Ionicons.glyphMap}
                   size={18}
-                  color={activeTheme.text}
+                  color="#FFFFFF"
                 />
-                <Text style={styles.actionText}>{item.title}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={activeTheme.textMuted} />
-            </Pressable>
-          ))}
+                <Text style={styles.companionActionText}>{item.title}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -266,72 +327,201 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       paddingBottom: 120,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: isWideWeb ? 1040 : undefined,
       alignSelf: "center",
     },
     profileHero: {
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: theme.spacing.xl,
+      gap: isWideWeb ? theme.spacing.xl : theme.spacing.lg,
+      paddingBottom: theme.spacing.lg,
       paddingHorizontal: theme.spacing.lg,
       borderRadius: 34,
       overflow: "hidden",
       backgroundColor: activeTheme.primaryDark,
-      minHeight: 260,
-      justifyContent: "center",
+      minHeight: isWideWeb ? 430 : 360,
+      justifyContent: "space-between",
+      marginHorizontal: -theme.spacing.lg,
+      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
     },
     profileHeroImage: {
       ...StyleSheet.absoluteFillObject,
     },
     profileHeroShade: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.44)",
+      backgroundColor: "rgba(0,0,0,0.48)",
+    },
+    heroTopBar: {
+      zIndex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    statusPill: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      backgroundColor: "rgba(0,0,0,0.34)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    statusPillText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "capitalize",
+    },
+    heroIconButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.92)",
+    },
+    heroIdentity: {
+      zIndex: 1,
+      flexDirection: isWideWeb ? "row" : "column",
+      alignItems: isWideWeb ? "flex-end" : "flex-start",
+      gap: theme.spacing.md,
+      maxWidth: isWideWeb ? 760 : undefined,
+    },
+    heroCopy: {
+      gap: 7,
     },
     name: {
       color: "#FFFFFF",
-      fontSize: 26,
+      fontSize: isWideWeb ? 46 : 34,
+      lineHeight: isWideWeb ? 52 : 39,
       fontWeight: "900",
     },
     role: {
       color: "#FFE0BD",
       fontSize: 14,
-      fontWeight: "800",
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    contactRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      maxWidth: isWideWeb ? 560 : 320,
     },
     phone: {
       color: "rgba(255,255,255,0.84)",
       fontSize: 15,
+      fontWeight: "700",
+      flexShrink: 1,
+    },
+    statStrip: {
+      zIndex: 1,
+      flexDirection: "row",
+      gap: 10,
+    },
+    heroStat: {
+      flex: 1,
+      minHeight: 78,
+      borderRadius: 22,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+    },
+    heroStatValue: {
+      color: "#FFFFFF",
+      fontSize: 17,
+      fontWeight: "900",
+      textTransform: "capitalize",
+    },
+    heroStatLabel: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 11,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    dashboardGrid: {
+      flexDirection: isWideWeb ? "row" : "column",
+      gap: theme.spacing.lg,
     },
     infoCard: {
+      flex: 1,
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 30,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
-      gap: theme.spacing.md,
+      gap: theme.spacing.lg,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
     },
     companionCard: {
-      backgroundColor: activeTheme.safeSurface,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
+      minHeight: isWideWeb ? 300 : 420,
+      borderRadius: 34,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
+      flexDirection: isWideWeb ? "row" : "column",
+    },
+    companionImageWrap: {
+      flex: isWideWeb ? 0.9 : undefined,
+      height: isWideWeb ? "100%" : 190,
+      minHeight: isWideWeb ? 300 : undefined,
+      overflow: "hidden",
+      backgroundColor: activeTheme.surface,
+    },
+    companionImage: { width: "100%", height: "100%" },
+    companionContent: {
+      flex: 1,
       padding: theme.spacing.lg,
-      gap: theme.spacing.md,
+      gap: 12,
+      justifyContent: "center",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    sectionKicker: {
+      color: activeTheme.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    companionKicker: {
+      color: "#FFE0BD",
+    },
+    sectionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.safeSurface,
     },
     sectionTitle: {
       color: activeTheme.text,
       fontSize: 22,
-      fontWeight: "800",
+      fontWeight: "900",
     },
     stack: {
       gap: 8,
     },
     verificationCard: {
-      borderRadius: theme.radius.md,
+      borderRadius: 24,
       backgroundColor: activeTheme.warmSurface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      padding: theme.spacing.md,
-      gap: 6,
+      padding: theme.spacing.lg,
+      gap: 8,
     },
     verificationTitle: {
       color: activeTheme.text,
@@ -345,12 +535,14 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     verifyButton: {
       alignSelf: "flex-start",
-      minHeight: 38,
+      minHeight: 42,
       borderRadius: theme.radius.pill,
       backgroundColor: activeTheme.primary,
       paddingHorizontal: 14,
       alignItems: "center",
       justifyContent: "center",
+      flexDirection: "row",
+      gap: 7,
       marginTop: 6,
     },
     verifyButtonText: {
@@ -376,24 +568,60 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       fontWeight: "700",
     },
     companionBody: {
-      color: activeTheme.textMuted,
+      color: "rgba(255,255,255,0.78)",
       fontSize: 14,
       lineHeight: 21,
     },
+    companionTitle: {
+      color: "#FFFFFF",
+      fontSize: isWideWeb ? 34 : 27,
+      lineHeight: isWideWeb ? 40 : 33,
+      fontWeight: "900",
+    },
+    companionActionRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginTop: 4,
+    },
+    companionAction: {
+      minHeight: 46,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      backgroundColor: "rgba(255,255,255,0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    companionActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
     actionRow: {
-      minHeight: 56,
-      borderRadius: theme.radius.md,
+      minHeight: 68,
+      borderRadius: 22,
       backgroundColor: activeTheme.surfaceElevated,
       paddingHorizontal: theme.spacing.md,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: 12,
     },
     actionLeft: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
     },
+    actionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.safeSurface,
+    },
+    actionCopy: { flex: 1 },
     actionText: {
       color: activeTheme.text,
       fontSize: 15,
@@ -427,6 +655,36 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     toggleKnobOn: {
       transform: [{ translateX: 20 }],
       backgroundColor: "#FFFFFF",
+    },
+    actionGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    tileAction: {
+      width: isWideWeb ? "48%" : "100%",
+      minHeight: 118,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surfaceElevated,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    tileIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.safeSurface,
+    },
+    tileText: {
+      color: activeTheme.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: "900",
     },
     logoutButton: {
       minHeight: 56,

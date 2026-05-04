@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 
 import { type CookDirectoryRecord } from "@/lib/cook-data";
 import { getCookImage, heroFoodImages } from "@/lib/food-visuals";
@@ -123,7 +123,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     screen: { flex: 1, backgroundColor: activeTheme.bg },
     content: {
       width: "100%",
-      maxWidth: Platform.OS === "web" ? 980 : undefined,
       alignSelf: "center",
       paddingHorizontal: theme.spacing.lg,
       paddingTop: theme.layout.screenTop,

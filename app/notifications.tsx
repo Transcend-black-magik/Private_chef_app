@@ -118,7 +118,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: 780,
       alignSelf: "center",
     },
     topRow: {

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -177,7 +176,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: Platform.OS === "web" ? 1040 : undefined,
       alignSelf: "center",
     },
     fixedBackButton: {

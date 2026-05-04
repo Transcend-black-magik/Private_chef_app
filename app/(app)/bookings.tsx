@@ -128,6 +128,7 @@ export default function BookingsScreen() {
                 bounces={false}
                 overScrollMode="never">
       <View style={styles.headerRow}>
+        <View style={styles.headerGlow} />
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>Explorer bookings</Text>
           <Text style={styles.title}>Bookings</Text>
@@ -141,22 +142,40 @@ export default function BookingsScreen() {
             style={[styles.binButton, bookingView === "completed" && styles.binButtonActive]}
             onPress={() => setBookingView((value) => (value === "completed" ? "active" : "completed"))}
           >
-            <Ionicons name="wallet-outline" size={18} color={bookingView === "completed" ? "#FFFFFF" : activeTheme.text} />
+            <Ionicons name="wallet-outline" size={18} color={bookingView === "completed" ? "#171713" : "#FFFFFF"} />
           </Pressable>
           <Pressable
             style={[styles.binButton, bookingView === "cancelled" && styles.binButtonActive]}
             onPress={() => setBookingView((value) => (value === "cancelled" ? "active" : "cancelled"))}
           >
-            <Ionicons name={bookingView === "cancelled" ? "archive-outline" : "trash-outline"} size={18} color={bookingView === "cancelled" ? "#FFFFFF" : activeTheme.text} />
+            <Ionicons name={bookingView === "cancelled" ? "archive-outline" : "trash-outline"} size={18} color={bookingView === "cancelled" ? "#171713" : "#FFFFFF"} />
           </Pressable>
           <Pressable style={styles.binButton} onPress={() => router.push("/notifications" as never)}>
-            <Ionicons name="notifications-outline" size={18} color={activeTheme.text} />
+            <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
             {unreadNotifications ? (
               <View style={styles.smallBadge}>
                 <Text style={styles.smallBadgeText}>{unreadNotifications}</Text>
               </View>
             ) : null}
           </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.metricGrid}>
+        <View style={styles.metricCard}>
+          <Ionicons name="flame-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{liveBookings.length}</Text>
+          <Text style={styles.metricLabel}>Active</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="checkmark-done-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{completedBookings.length}</Text>
+          <Text style={styles.metricLabel}>Completed</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Ionicons name="archive-outline" size={19} color={activeTheme.primaryDark} />
+          <Text style={styles.metricValue}>{archivedBookings.length}</Text>
+          <Text style={styles.metricLabel}>Archived</Text>
         </View>
       </View>
 
@@ -427,7 +446,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       paddingBottom: 120,
       gap: theme.spacing.lg,
       width: "100%",
-      maxWidth: isWideWeb ? 980 : undefined,
       alignSelf: "center",
     },
     headerRow: {
@@ -436,46 +454,84 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       borderRadius: 34,
       padding: theme.spacing.lg,
-      backgroundColor: activeTheme.surface,
+      minHeight: isWideWeb ? 300 : 250,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: activeTheme.primaryDark,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
+      marginHorizontal: -theme.spacing.lg,
+      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+    },
+    headerGlow: {
+      position: "absolute",
+      right: -60,
+      bottom: -80,
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      backgroundColor: "rgba(255,255,255,0.14)",
     },
     headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
+    kicker: { color: "#FFE0BD", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: "#FFFFFF", fontSize: isWideWeb ? 52 : 38, lineHeight: isWideWeb ? 58 : 44, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
       borderRadius: 17,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.16)",
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: "rgba(255,255,255,0.18)",
       paddingHorizontal: 10,
     },
-    headerPillText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
+    headerPillText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
     binButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.16)",
       borderWidth: 1,
-      borderColor: activeTheme.border,
+      borderColor: "rgba(255,255,255,0.18)",
     },
     binButtonActive: {
-      backgroundColor: activeTheme.primaryDark,
-      borderColor: activeTheme.primaryDark,
+      backgroundColor: "#FFFFFF",
+      borderColor: "#FFFFFF",
     },
+    metricGrid: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: -44,
+    },
+    metricCard: {
+      flex: 1,
+      minHeight: 112,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
+    },
+    metricValue: { color: activeTheme.text, fontSize: 26, fontWeight: "900" },
+    metricLabel: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
     smallBadge: {
       position: "absolute",
       top: -5,
@@ -506,7 +562,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
     requestCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: 30,
+      borderRadius: 28,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
@@ -540,7 +596,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       flexDirection: "row",
       gap: 8,
       borderRadius: 20,
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: activeTheme.safeSurface,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: 10,
