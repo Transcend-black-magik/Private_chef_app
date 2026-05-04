@@ -41,6 +41,10 @@ export function getIdentityVerificationStatusLabel(user?: Pick<StoredUser, "cook
     return "Under review";
   }
 
+  if (status === "failed") {
+    return "Needs retry";
+  }
+
   return "Not started";
 }
 

@@ -30,6 +30,8 @@ import {
 import { getAsyncErrorMessage, withTimeout } from "@/lib/async-guard";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
 import { firebaseApp } from "@/lib/firebase";
+import type { MealItem } from "@/lib/meal-data";
+import { isAnyAccountIdentifierOnline } from "@/lib/presence";
 
 export const EXPLORER_FEE_RATE = 0.1;
 export const COOK_FEE_RATE = 0.1;
@@ -88,6 +90,8 @@ export type BookingRecord = {
   cancellationReason: string;
   fundsReleaseStatus: FundsReleaseStatus;
   trustReleaseConfirmed: boolean;
+  instantMatch: boolean;
+  deliveryMode: "cook_delivery" | "dispatch" | "home_service";
   threadId: string;
   requestGroupKey: string;
   createdAt?: string;
@@ -126,6 +130,8 @@ export type ChatMessageRecord = {
   body: string;
   createdAt?: string;
 };
+
+let cachedThreadsForCurrentUser: ChatThreadRecord[] = [];
 
 function getFirestoreInstance() {
   return firebaseApp ? getFirestore(firebaseApp) : null;
@@ -263,11 +269,33 @@ async function getCurrentUserIdentifiers() {
 }
 
 function bookingIsBlocked(status: BookingStatus) {
-  return status === "cancelled" || status === "declined";
+  return (
+    status === "cancelled" ||
+    status === "declined" ||
+    status === "completed" ||
+    status === "funds_released"
+  );
 }
 
 export function isBookingThreadBlocked(booking: Pick<BookingRecord, "status">) {
   return bookingIsBlocked(booking.status);
+}
+
+export function isBookingThreadOpenWindow(
+  booking: Pick<BookingRecord, "serviceDateLabel" | "status">,
+  now = new Date(),
+) {
+  if (bookingIsBlocked(booking.status)) {
+    return false;
+  }
+
+  const serviceTime = Date.parse(booking.serviceDateLabel);
+  if (!Number.isFinite(serviceTime)) {
+    return false;
+  }
+
+  const minutesFromService = (serviceTime - now.getTime()) / 60000;
+  return minutesFromService <= 30 && minutesFromService >= -30;
 }
 
 function buildMoneySummary(subtotalAmount: number, ingredientBudgetAmount: number) {
@@ -340,6 +368,11 @@ function mapBookingRecord(id: string, data: Record<string, unknown>): BookingRec
     cancellationReason: String(data.cancellationReason || ""),
     fundsReleaseStatus: (data.fundsReleaseStatus as FundsReleaseStatus) || "unpaid",
     trustReleaseConfirmed: Boolean(data.trustReleaseConfirmed),
+    instantMatch: Boolean(data.instantMatch),
+    deliveryMode:
+      data.deliveryMode === "dispatch" || data.deliveryMode === "home_service"
+        ? data.deliveryMode
+        : "cook_delivery",
     threadId: String(data.threadId || ""),
     requestGroupKey: String(data.requestGroupKey || ""),
     createdAt: timestampToIsoString(data.createdAt),
@@ -399,6 +432,43 @@ function mapMessageRecord(id: string, data: Record<string, unknown>): ChatMessag
 
 function sortThreads(records: ChatThreadRecord[]) {
   return records.sort((left, right) => (right.lastMessageAt || "").localeCompare(left.lastMessageAt || ""));
+}
+
+function cacheThreads(records: ChatThreadRecord[]) {
+  cachedThreadsForCurrentUser = records;
+  return records;
+}
+
+export function getCachedThreadsForCurrentUser() {
+  return cachedThreadsForCurrentUser;
+}
+
+function updateCachedThreadAfterMessage(params: {
+  thread: ChatThreadRecord;
+  senderIdentifier: string;
+  body: string;
+  bookingStatus?: BookingStatus;
+  isBlocked?: boolean;
+}) {
+  const now = isoNow();
+  const nextThread: ChatThreadRecord = {
+    ...params.thread,
+    bookingStatus: params.bookingStatus || params.thread.bookingStatus,
+    lastMessageText: params.body,
+    lastMessageSenderId: params.senderIdentifier,
+    lastMessageAt: now,
+    updatedAt: now,
+    messageCount: params.thread.messageCount + 1,
+    isBlocked:
+      typeof params.isBlocked === "boolean" ? params.isBlocked : params.thread.isBlocked,
+  };
+
+  cacheThreads(
+    sortThreads([
+      nextThread,
+      ...cachedThreadsForCurrentUser.filter((item) => item.id !== params.thread.id),
+    ]),
+  );
 }
 
 async function postThreadMessage(params: {
@@ -468,8 +538,17 @@ async function postThreadMessage(params: {
     timeoutMessage: "Updating this conversation is taking too long. Please try again.",
   });
 
+  updateCachedThreadAfterMessage({
+    thread,
+    senderIdentifier,
+    body: params.body,
+    bookingStatus: params.bookingStatus,
+    isBlocked: params.isBlocked,
+  });
+
   const recipientId = recipientIdentifiers[0];
-  if (recipientId) {
+  const recipientOnline = await isAnyAccountIdentifierOnline(recipientIdentifiers);
+  if (recipientId && !recipientOnline) {
     await createNotification({
       recipientId,
       actorId: senderIdentifier,
@@ -601,6 +680,8 @@ export async function createBookingRequest(input: {
         cancellationReason: "",
         fundsReleaseStatus: "unpaid",
         trustReleaseConfirmed: false,
+        instantMatch: false,
+        deliveryMode: input.serviceMode === "explorer_home" ? "home_service" : "cook_delivery",
         threadId: threadRef.id,
         requestGroupKey,
         createdAt: serverTimestamp(),
@@ -667,7 +748,92 @@ export async function createBookingRequest(input: {
     threadId: threadRef.id,
   });
 
+  cacheThreads(
+    sortThreads([
+      {
+        id: threadRef.id,
+        bookingId: bookingRef.id,
+        explorerId: explorerParticipantId,
+        explorerName: explorer.name,
+        cookId: cookParticipantId,
+        cookName: input.cook.name,
+        participantIds: [explorerParticipantId, cookParticipantId],
+        bookingStatus: "pending_payment",
+        lastMessageText: `New ${serviceKindLabel(serviceKind).toLowerCase()} request created.`,
+        lastMessageSenderId: explorerParticipantId,
+        lastMessageAt: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        messageCount: 1,
+        unreadCountBy: {
+          [toSafeFieldKey(explorerParticipantId)]: 0,
+          [toSafeFieldKey(cookParticipantId)]: 1,
+        },
+        lastReadAtBy: {
+          [toSafeFieldKey(explorerParticipantId)]: nowIso,
+        },
+        isBlocked: false,
+        archivedBy: {},
+        hiddenBy: {},
+      },
+      ...cachedThreadsForCurrentUser.filter((thread) => thread.id !== threadRef.id),
+    ]),
+  );
+
   return { bookingId: bookingRef.id, threadId: threadRef.id };
+}
+
+export async function createInstantMealBookingRequest(input: {
+  cook: CookDirectoryRecord;
+  meal: MealItem;
+  deliveryMode?: BookingRecord["deliveryMode"];
+}) {
+  const explorer = await getCurrentUserRecord();
+  if (!explorer) {
+    throw new Error("You need to be signed in before creating an instant match.");
+  }
+
+  const priceMatch = input.meal.priceHint.match(/\d+/g);
+  const subtotal = priceMatch?.[1] || priceMatch?.[0] || "35";
+  const serviceDate = new Date(Date.now() + 15 * 60000);
+  const serviceDateLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(serviceDate);
+
+  const result = await createBookingRequest({
+    cook: input.cook,
+    dishSummary: input.meal.title,
+    serviceDateLabel,
+    guestCount: "1",
+    areaLabel: input.cook.serviceAreaLabel || explorer.city || input.cook.location,
+    serviceMode: input.deliveryMode === "home_service" ? "explorer_home" : "cook_home",
+    serviceKind: "cook_only",
+    wantedInMeal: input.meal.ingredients.join(", "),
+    avoidInMeal: explorer.dislikedIngredients || "",
+    kitchenGuidance: "Instant meal match. Payment confirms this booking automatically.",
+    fitnessGoal: explorer.gymGoal || "",
+    portionGuidance: explorer.portionPreference || "",
+    homeAccessNotes: explorer.addressLine1 || "",
+    notes: `Instant match for ${input.meal.category}.`,
+    subtotalInput: subtotal,
+  });
+
+  const firestore = getFirestoreInstance();
+  if (firestore) {
+    await updateDoc(doc(firestore, "bookingRequests", result.bookingId), {
+      instantMatch: true,
+      deliveryMode: input.deliveryMode || "cook_delivery",
+      latestOfferNote: "Instant match. Payment confirms this booking automatically.",
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  return result;
 }
 
 async function getBookingsForIdentifiers(field: "explorerId" | "cookId", identifiers: string[]) {
@@ -752,14 +918,14 @@ export async function fetchThreadsForCurrentUser() {
       { timeoutMessage: "Loading chats is taking too long. Please try again." },
     );
 
-    return sortThreads(
+    return cacheThreads(sortThreads(
       snapshot.docs
         .map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>))
         .filter((thread) => {
           const visibility = threadVisibilityState(thread, currentUser);
           return !visibility.hidden && !visibility.archived;
         }),
-    );
+    ));
   } catch {
     return [] as ChatThreadRecord[];
   }
@@ -770,6 +936,11 @@ export function subscribeToThreadsForCurrentUser(
   onError?: (error: Error) => void,
 ) {
   const firestore = getFirestoreInstance();
+  const cachedThreads = getCachedThreadsForCurrentUser();
+  if (cachedThreads.length) {
+    callback(cachedThreads);
+  }
+
   if (!firestore) {
     callback([]);
     return () => undefined;
@@ -791,14 +962,14 @@ export function subscribeToThreadsForCurrentUser(
       ),
       (snapshot) => {
         callback(
-          sortThreads(
+          cacheThreads(sortThreads(
             snapshot.docs
               .map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>))
               .filter((thread) => {
                 const visibility = threadVisibilityState(thread, currentUser);
                 return !visibility.hidden && !visibility.archived;
               }),
-          ),
+          )),
         );
       },
       (error) => onError?.(error),
@@ -848,10 +1019,13 @@ function buildThreadReadUpdate(thread: ChatThreadRecord, currentUser: Pick<Store
   const updatePayload: Record<string, unknown> = {
     updatedAt: serverTimestamp(),
   };
+  const shareReadReceipts = (currentUser as Pick<StoredUser, "shareReadReceipts">).shareReadReceipts !== false;
 
   getMatchingParticipantIds(thread.participantIds, currentUser).forEach((identifier) => {
     updatePayload[`unreadCountBy.${toSafeFieldKey(identifier)}`] = 0;
-    updatePayload[`lastReadAtBy.${toSafeFieldKey(identifier)}`] = isoNow();
+    if (shareReadReceipts) {
+      updatePayload[`lastReadAtBy.${toSafeFieldKey(identifier)}`] = isoNow();
+    }
   });
 
   return updatePayload;
@@ -1002,8 +1176,10 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
     { merge: true },
   );
 
+  const nextStatus: BookingStatus = booking.instantMatch ? "accepted" : "pending_cook";
+
   await updateDoc(doc(firestore, "bookingRequests", bookingId), {
-    status: "pending_cook",
+    status: nextStatus,
     fundsReleaseStatus: "held",
     updatedAt: serverTimestamp(),
   });
@@ -1012,8 +1188,10 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
     threadId: booking.threadId,
     bookingId: booking.id,
     sender: currentUser,
-    body: "Dummy payment completed. Funds are now held in-app until trust/release is confirmed.",
-    bookingStatus: "pending_cook",
+    body: booking.instantMatch
+      ? "Test Paystack payment completed. This instant match is confirmed and ready for service."
+      : "Dummy payment completed. Funds are now held in-app until trust/release is confirmed.",
+    bookingStatus: nextStatus,
   });
 
   await createNotification({
@@ -1021,8 +1199,10 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
     actorId: currentUser.id,
     actorName: currentUser.name,
     type: "booking_update",
-    title: "Funds held",
-    body: "The explorer completed the hold step and your request is ready for review.",
+    title: booking.instantMatch ? "Instant booking confirmed" : "Funds held",
+    body: booking.instantMatch
+      ? "The explorer paid for an instant match. You can cancel, message, or use service directions."
+      : "The explorer completed the hold step and your request is ready for review.",
     bookingId: booking.id,
     threadId: booking.threadId,
   });
@@ -1180,6 +1360,7 @@ export async function releaseBookingFundsAsExplorer(bookingId: string) {
     sender: currentUser,
     body: `Explorer marked trust/release. Dummy payout of ${booking.payoutAmount} is now released to the cook.`,
     bookingStatus: "funds_released",
+    isBlocked: true,
   });
 
   await createNotification({
@@ -1214,6 +1395,7 @@ export async function completeBookingAsCook(bookingId: string, note: string) {
       ? `Cook marked the service as done. Note: ${note.trim()}`
       : "Cook marked the service as done and is waiting for trust/release.",
     bookingStatus: "completed",
+    isBlocked: true,
   });
 }
 

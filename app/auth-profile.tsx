@@ -142,6 +142,8 @@ export default function AuthProfileScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
       >
         <View style={styles.heroGlow} />
 

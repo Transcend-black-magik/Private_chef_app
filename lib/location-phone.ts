@@ -31,49 +31,59 @@ export function getDialCode(countryCode?: string | null) {
 }
 
 export async function detectLocationProfile() {
-  const permission = await Location.requestForegroundPermissionsAsync();
+  try {
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      return null;
+    }
 
-  if (!permission.granted) {
+    const permission = await Location.requestForegroundPermissionsAsync();
+
+    if (!permission.granted) {
+      return null;
+    }
+
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      mayShowUserSettingsDialog: false,
+    });
+    const places = await Location.reverseGeocodeAsync(position.coords);
+    const firstPlace = places[0];
+
+    if (!firstPlace) {
+      return null;
+    }
+
+    const countryCode = firstPlace.isoCountryCode?.toUpperCase() || "US";
+    const countryName = firstPlace.country || "United States";
+    const locality = firstText(
+      (firstPlace as { district?: string }).district,
+      (firstPlace as { subregion?: string }).subregion,
+      (firstPlace as { city?: string }).city,
+      (firstPlace as { name?: string }).name,
+      (firstPlace as { street?: string }).street,
+    );
+    const city = firstText(
+      (firstPlace as { city?: string }).city,
+      (firstPlace as { district?: string }).district,
+      (firstPlace as { subregion?: string }).subregion,
+      (firstPlace as { name?: string }).name,
+    );
+    const region = firstText(
+      (firstPlace as { region?: string }).region,
+      (firstPlace as { subregion?: string }).subregion,
+      (firstPlace as { city?: string }).city,
+    );
+
+    return {
+      countryCode,
+      countryName,
+      dialCode: getDialCode(countryCode),
+      locality,
+      city,
+      region,
+    } satisfies DetectedLocationProfile;
+  } catch {
     return null;
   }
-
-  const position = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
-  });
-  const places = await Location.reverseGeocodeAsync(position.coords);
-  const firstPlace = places[0];
-
-  if (!firstPlace) {
-    return null;
-  }
-
-  const countryCode = firstPlace.isoCountryCode?.toUpperCase() || "US";
-  const countryName = firstPlace.country || "United States";
-  const locality = firstText(
-    (firstPlace as { district?: string }).district,
-    (firstPlace as { subregion?: string }).subregion,
-    (firstPlace as { city?: string }).city,
-    (firstPlace as { name?: string }).name,
-    (firstPlace as { street?: string }).street,
-  );
-  const city = firstText(
-    (firstPlace as { city?: string }).city,
-    (firstPlace as { district?: string }).district,
-    (firstPlace as { subregion?: string }).subregion,
-    (firstPlace as { name?: string }).name,
-  );
-  const region = firstText(
-    (firstPlace as { region?: string }).region,
-    (firstPlace as { subregion?: string }).subregion,
-    (firstPlace as { city?: string }).city,
-  );
-
-  return {
-    countryCode,
-    countryName,
-    dialCode: getDialCode(countryCode),
-    locality,
-    city,
-    region,
-  } satisfies DetectedLocationProfile;
 }

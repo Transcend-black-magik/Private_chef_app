@@ -107,6 +107,8 @@ export default function CompanionPreferencesScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
       >
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backText}>Back</Text>

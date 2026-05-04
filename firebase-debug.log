@@ -1,0 +1,140 @@
+[debug] [2026-05-04T14:14:21.507Z] ----------------------------------------------------------------------
+[debug] [2026-05-04T14:14:21.513Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\tega\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules
+[debug] [2026-05-04T14:14:21.514Z] CLI Version:   15.15.0
+[debug] [2026-05-04T14:14:21.514Z] Platform:      win32
+[debug] [2026-05-04T14:14:21.515Z] Node Version:  v24.15.0
+[debug] [2026-05-04T14:14:21.515Z] Time:          Mon May 04 2026 07:14:21 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-05-04T14:14:21.515Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-04T14:14:21.520Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-05-04T14:14:26.910Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-04T14:14:26.911Z] > authorizing via signed-in user (kuteoghenetegaprosper@gmail.com)
+[debug] [2026-05-04T14:14:26.911Z] [iam] checking project cook-for-me-8002d for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-05-04T14:14:26.913Z] Checked if tokens are valid: false, expires at: 1777470251213
+[debug] [2026-05-04T14:14:26.914Z] Checked if tokens are valid: false, expires at: 1777470251213
+[debug] [2026-05-04T14:14:26.914Z] > refreshing access token with scopes: []
+[debug] [2026-05-04T14:14:26.917Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-04T14:14:26.919Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-04T14:14:27.660Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-05-04T14:14:27.661Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-05-04T14:14:28.410Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-04T14:14:28.410Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-04T14:14:28.449Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions [none]
+[debug] [2026-05-04T14:14:28.449Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions  x-goog-user-project=cook-for-me-8002d
+[debug] [2026-05-04T14:14:28.450Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-04T14:14:31.500Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions 200
+[debug] [2026-05-04T14:14:31.501Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'cook-for-me-8002d'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-04T14:14:31.512Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:31.513Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:31.513Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/cook-for-me-8002d/services/firestore.googleapis.com [none]
+[debug] [2026-05-04T14:14:31.513Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/cook-for-me-8002d/services/firestore.googleapis.com  x-goog-user-project=cook-for-me-8002d
+[debug] [2026-05-04T14:14:32.722Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/cook-for-me-8002d/services/firestore.googleapis.com 200
+[debug] [2026-05-04T14:14:32.723Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/cook-for-me-8002d/services/firestore.googleapis.com [omitted]
+[info] +  firestore: required API firestore.googleapis.com is enabled 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-04T14:14:32.769Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:32.770Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:32.770Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/cook-for-me-8002d/databases/(default) [none]
+[debug] [2026-05-04T14:14:33.821Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/cook-for-me-8002d/databases/(default) 200
+[debug] [2026-05-04T14:14:33.822Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/cook-for-me-8002d/databases/(default) {"name":"projects/cook-for-me-8002d/databases/(default)","uid":"4dff4d28-c373-45e4-8829-6524d368f4cd","createTime":"2026-04-26T15:00:03.717625Z","updateTime":"2026-04-26T15:00:03.717625Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-04T13:14:34.513379Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IMOyuebon5QDMLTM+qqCjJQD"}
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-05-04T14:14:33.828Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:33.829Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:33.830Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d:test [none]
+[debug] [2026-05-04T14:14:33.831Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d:test [omitted]
+[debug] [2026-05-04T14:14:35.353Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d:test 200
+[debug] [2026-05-04T14:14:35.355Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d:test {}
+[info] +  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-05-04T14:14:35.360Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:35.361Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:35.362Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases pageSize=10&pageToken=
+[debug] [2026-05-04T14:14:36.214Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases 200
+[debug] [2026-05-04T14:14:36.214Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases {"releases":[{"name":"projects/cook-for-me-8002d/releases/cloud.firestore","rulesetName":"projects/cook-for-me-8002d/rulesets/b49f8acf-5a1f-46f9-8521-4d421b296897","createTime":"2026-04-26T15:00:07.918048Z","updateTime":"2026-04-28T22:08:58.190665Z"}]}
+[debug] [2026-05-04T14:14:36.216Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:36.217Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:36.218Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets/b49f8acf-5a1f-46f9-8521-4d421b296897 [none]
+[debug] [2026-05-04T14:14:37.038Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets/b49f8acf-5a1f-46f9-8521-4d421b296897 200
+[debug] [2026-05-04T14:14:37.039Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets/b49f8acf-5a1f-46f9-8521-4d421b296897 [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-05-04T14:14:37.047Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:37.047Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:37.049Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets [none]
+[debug] [2026-05-04T14:14:37.049Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets [omitted]
+[debug] [2026-05-04T14:14:37.668Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets 200
+[debug] [2026-05-04T14:14:37.669Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/rulesets {"name":"projects/cook-for-me-8002d/rulesets/9b964b06-a35a-41f5-9319-86051a0b248e","source":{"files":[{"content":"rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function signedIn() {\n      return request.auth != null;\n    }\n\n    function currentEmail() {\n      return signedIn() && request.auth.token.email is string\n        ? request.auth.token.email\n        : \"\";\n    }\n\n    function isOwner(userId) {\n      return signedIn() && request.auth.uid == userId;\n    }\n\n    function isSignedInUsersOwnEmail() {\n      return signedIn() &&\n        request.auth.token.email is string &&\n        resource.data.email is string &&\n        request.auth.token.email == resource.data.email;\n    }\n\n    function matchesCurrentAccount(identifier) {\n      return signedIn() && (\n        identifier == request.auth.uid ||\n        (currentEmail() != \"\" && identifier == currentEmail())\n      );\n    }\n\n    function participantListHasCurrentAccount(participantIds) {\n      return participantIds is list && (\n        request.auth.uid in participantIds ||\n        (currentEmail() != \"\" && currentEmail() in participantIds)\n      );\n    }\n\n    function bookingExplorerMutableKeys() {\n      return [\n        \"dishSummary\",\n        \"serviceDateLabel\",\n        \"guestCount\",\n        \"areaLabel\",\n        \"serviceMode\",\n        \"serviceKind\",\n        \"needsMarketTrip\",\n        \"ingredientBudgetAmount\",\n        \"notes\",\n        \"subtotalAmount\",\n        \"explorerFeeAmount\",\n        \"cookFeeAmount\",\n        \"platformFeeAmount\",\n        \"totalAmount\",\n        \"payoutAmount\",\n        \"latestOfferAmount\",\n        \"latestOfferBy\",\n        \"latestOfferNote\",\n        \"negotiationOpen\",\n        \"cancellationReason\",\n        \"fundsReleaseStatus\",\n        \"trustReleaseConfirmed\",\n        \"instantMatch\",\n        \"deliveryMode\",\n        \"status\",\n        \"updatedAt\"\n      ];\n    }\n\n    function bookingCookMutableKeys() {\n      return [\n        \"subtotalAmount\",\n        \"explorerFeeAmount\",\n        \"cookFeeAmount\",\n        \"platformFeeAmount\",\n        \"totalAmount\",\n        \"payoutAmount\",\n        \"latestOfferAmount\",\n        \"latestOfferBy\",\n        \"latestOfferNote\",\n        \"negotiationOpen\",\n        \"cancellationReason\",\n        \"deliveryMode\",\n        \"status\",\n        \"updatedAt\"\n      ];\n    }\n\n    function chatThreadMutableKeys() {\n      return [\n        \"bookingStatus\",\n        \"lastMessageText\",\n        \"lastMessageSenderId\",\n        \"lastMessageAt\",\n        \"updatedAt\",\n        \"messageCount\",\n        \"unreadCountBy\",\n        \"lastReadAtBy\",\n        \"isBlocked\",\n        \"archivedBy\",\n        \"hiddenBy\"\n      ];\n    }\n\n    function isParticipant(data) {\n      return signedIn() && (\n        matchesCurrentAccount(data.explorerId) ||\n        matchesCurrentAccount(data.cookId) ||\n        participantListHasCurrentAccount(data.participantIds)\n      );\n    }\n\n    match /users/{userId} {\n      allow create: if isOwner(userId);\n      allow update: if isOwner(userId);\n      allow read: if signedIn() && (\n        isOwner(userId) ||\n        isSignedInUsersOwnEmail() ||\n        (\n          resource.data.role == \"cook\" &&\n          resource.data.profileComplete == true\n        )\n      );\n    }\n\n    match /cookVerificationQueue/{userId} {\n      allow create, update, read: if isOwner(userId);\n    }\n\n    match /bookingRequests/{bookingId} {\n      allow create: if signedIn() &&\n        matchesCurrentAccount(request.resource.data.explorerId);\n      allow read: if isParticipant(resource.data);\n      allow update: if signedIn() && (\n        (\n          matchesCurrentAccount(resource.data.explorerId) &&\n          request.resource.data.diff(resource.data).changedKeys().hasOnly(bookingExplorerMutableKeys())\n        ) ||\n        (\n          matchesCurrentAccount(resource.data.cookId) &&\n          request.resource.data.diff(resource.data).changedKeys().hasOnly(bookingCookMutableKeys())\n        )\n      );\n    }\n\n    match /chatThreads/{threadId} {\n      allow create: if signedIn() &&\n        matchesCurrentAccount(request.resource.data.explorerId) &&\n        participantListHasCurrentAccount(request.resource.data.participantIds);\n      allow read: if isParticipant(resource.data);\n      allow update: if isParticipant(resource.data) &&\n        request.resource.data.diff(resource.data).changedKeys().hasOnly(chatThreadMutableKeys());\n\n      match /messages/{messageId} {\n        allow create: if signedIn() &&\n          participantListHasCurrentAccount(\n            get(/databases/$(database)/documents/chatThreads/$(threadId)).data.participantIds\n          ) &&\n          matchesCurrentAccount(request.resource.data.senderId);\n        allow read: if signedIn() &&\n          participantListHasCurrentAccount(\n            get(/databases/$(database)/documents/chatThreads/$(threadId)).data.participantIds\n          );\n      }\n    }\n\n    match /payments/{paymentId} {\n      allow create: if signedIn() && matchesCurrentAccount(request.resource.data.explorerId);\n      allow read: if isParticipant(resource.data);\n      allow update: if signedIn() &&\n        matchesCurrentAccount(resource.data.explorerId) &&\n        matchesCurrentAccount(request.resource.data.explorerId) &&\n        request.resource.data.diff(resource.data).changedKeys().hasOnly([\n          \"status\",\n          \"provider\",\n          \"updatedAt\",\n          \"amount\",\n          \"subtotalAmount\",\n          \"ingredientBudgetAmount\",\n          \"explorerFeeAmount\",\n          \"cookFeeAmount\",\n          \"platformFeeAmount\",\n          \"payoutAmount\",\n          \"currencyCode\"\n        ]);\n    }\n\n    match /notifications/{notificationId} {\n      allow create: if signedIn();\n      allow read: if signedIn() && matchesCurrentAccount(resource.data.recipientId);\n      allow update: if signedIn() &&\n        matchesCurrentAccount(resource.data.recipientId) &&\n        request.resource.data.diff(resource.data).changedKeys().hasOnly([\n          \"read\"\n        ]);\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-05-04T14:14:38.341487Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-05-04T14:14:37.670Z] [rules] created ruleset projects/cook-for-me-8002d/rulesets/9b964b06-a35a-41f5-9319-86051a0b248e
+[debug] [2026-05-04T14:14:37.673Z] [rules] releasing cloud.firestore/(default) with ruleset projects/cook-for-me-8002d/rulesets/9b964b06-a35a-41f5-9319-86051a0b248e
+[debug] [2026-05-04T14:14:37.675Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:37.676Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:14:37.677Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases/cloud.firestore/(default) [none]
+[debug] [2026-05-04T14:14:37.678Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases/cloud.firestore/(default) {"release":{"name":"projects/cook-for-me-8002d/releases/cloud.firestore/(default)","rulesetName":"projects/cook-for-me-8002d/rulesets/9b964b06-a35a-41f5-9319-86051a0b248e"}}
+[debug] [2026-05-04T14:14:38.352Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases/cloud.firestore/(default) 200
+[debug] [2026-05-04T14:14:38.353Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/cook-for-me-8002d/releases/cloud.firestore/(default) {"name":"projects/cook-for-me-8002d/releases/cloud.firestore","rulesetName":"projects/cook-for-me-8002d/rulesets/9b964b06-a35a-41f5-9319-86051a0b248e","createTime":"2026-04-26T15:00:07.918048Z","updateTime":"2026-05-04T14:14:39.001734Z"}
+[debug] [2026-05-04T14:14:38.353Z] [rules] updated release projects/cook-for-me-8002d/releases/cloud.firestore
+[info] +  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/cook-for-me-8002d/overview
+[debug] [2026-05-04T14:31:59.463Z] ----------------------------------------------------------------------
+[debug] [2026-05-04T14:31:59.470Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\tega\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only database
+[debug] [2026-05-04T14:31:59.471Z] CLI Version:   15.15.0
+[debug] [2026-05-04T14:31:59.471Z] Platform:      win32
+[debug] [2026-05-04T14:31:59.471Z] Node Version:  v24.15.0
+[debug] [2026-05-04T14:31:59.472Z] Time:          Mon May 04 2026 07:31:59 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-05-04T14:31:59.472Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-04T14:32:03.078Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-04T14:32:03.080Z] > authorizing via signed-in user (kuteoghenetegaprosper@gmail.com)
+[debug] [2026-05-04T14:32:03.081Z] [iam] checking project cook-for-me-8002d for permissions ["firebase.projects.get","firebasedatabase.instances.update"]
+[debug] [2026-05-04T14:32:03.084Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:03.086Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:03.089Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions [none]
+[debug] [2026-05-04T14:32:03.089Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions  x-goog-user-project=cook-for-me-8002d
+[debug] [2026-05-04T14:32:03.090Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions {"permissions":["firebase.projects.get","firebasedatabase.instances.update"]}
+[debug] [2026-05-04T14:32:05.089Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions 200
+[debug] [2026-05-04T14:32:05.091Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cook-for-me-8002d:testIamPermissions {"permissions":["firebase.projects.get","firebasedatabase.instances.update"]}
+[debug] [2026-05-04T14:32:05.095Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:05.096Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:05.099Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/cook-for-me-8002d [none]
+[debug] [2026-05-04T14:32:05.808Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/cook-for-me-8002d 200
+[debug] [2026-05-04T14:32:05.808Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/cook-for-me-8002d {"projectId":"cook-for-me-8002d","projectNumber":"840527461539","displayName":"cook-for-me","name":"projects/cook-for-me-8002d","resources":{"hostingSite":"cook-for-me-8002d","realtimeDatabaseInstance":"cook-for-me-8002d-default-rtdb"},"state":"ACTIVE","etag":"1_0198a218-4474-4e76-910f-9349c8215e8b"}
+[info] 
+[info] === Deploying to 'cook-for-me-8002d'...
+[info] 
+[info] i  deploying database 
+[info] i  database: checking rules syntax... 
+[debug] [2026-05-04T14:32:05.813Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:05.813Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:05.814Z] >>> [apiv2][query] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb [none]
+[debug] [2026-05-04T14:32:07.410Z] <<< [apiv2][status] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb 200
+[debug] [2026-05-04T14:32:07.411Z] <<< [apiv2][body] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb {"name":"projects/840527461539/locations/us-central1/instances/cook-for-me-8002d-default-rtdb","project":"projects/840527461539","databaseUrl":"https://cook-for-me-8002d-default-rtdb.firebaseio.com","type":"DEFAULT_DATABASE","state":"ACTIVE"}
+[debug] [2026-05-04T14:32:07.414Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:07.415Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:07.416Z] >>> [apiv2][query] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json dryRun=true
+[debug] [2026-05-04T14:32:07.417Z] >>> [apiv2][body] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"presence\": {\n      \"$userId\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && auth.uid === $userId\"\n      }\n    }\n  }\n}\n"
+[debug] [2026-05-04T14:32:08.628Z] <<< [apiv2][status] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json 200
+[debug] [2026-05-04T14:32:08.628Z] <<< [apiv2][body] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json {"status":"ok"}
+[info] +  database: rules syntax for database cook-for-me-8002d-default-rtdb is valid 
+[info] i  database: releasing rules... 
+[debug] [2026-05-04T14:32:08.631Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:08.631Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:08.632Z] >>> [apiv2][query] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb [none]
+[debug] [2026-05-04T14:32:09.043Z] <<< [apiv2][status] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb 200
+[debug] [2026-05-04T14:32:09.043Z] <<< [apiv2][body] GET https://firebasedatabase.googleapis.com/v1beta/projects/cook-for-me-8002d/locations/-/instances/cook-for-me-8002d-default-rtdb {"name":"projects/840527461539/locations/us-central1/instances/cook-for-me-8002d-default-rtdb","project":"projects/840527461539","databaseUrl":"https://cook-for-me-8002d-default-rtdb.firebaseio.com","type":"DEFAULT_DATABASE","state":"ACTIVE"}
+[debug] [2026-05-04T14:32:09.045Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:09.045Z] Checked if tokens are valid: true, expires at: 1777907667410
+[debug] [2026-05-04T14:32:09.046Z] >>> [apiv2][query] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json 
+[debug] [2026-05-04T14:32:09.047Z] >>> [apiv2][body] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json "{\n  \"rules\": {\n    \".read\": false,\n    \".write\": false,\n    \"presence\": {\n      \"$userId\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth != null && auth.uid === $userId\"\n      }\n    }\n  }\n}\n"
+[debug] [2026-05-04T14:32:09.388Z] <<< [apiv2][status] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json 200
+[debug] [2026-05-04T14:32:09.388Z] <<< [apiv2][body] PUT https://cook-for-me-8002d-default-rtdb.firebaseio.com/.settings/rules.json {"status":"ok"}
+[info] +  database: rules for database cook-for-me-8002d-default-rtdb released successfully 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/cook-for-me-8002d/overview

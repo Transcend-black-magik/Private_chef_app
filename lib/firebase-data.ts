@@ -25,6 +25,8 @@ type PersistedUserRecord = {
   wantedIngredients?: string;
   stripeConnectedAccountId?: string;
   stripeOnboardingComplete?: boolean;
+  activeSessionId?: string;
+  activeSessionIssuedAt?: string;
   role: StoredUser["role"];
   provider: StoredUser["provider"];
   profileComplete: boolean;
@@ -49,8 +51,19 @@ type PersistedUserRecord = {
   updatedAt: string;
 };
 
-function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
-  const entries = Object.entries(value).filter(([, entryValue]) => entryValue !== undefined);
+function stripUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedFields(item)) as T;
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entryValue]) => entryValue !== undefined)
+    .map(([key, entryValue]) => [key, stripUndefinedFields(entryValue)]);
+
   return Object.fromEntries(entries) as T;
 }
 
@@ -100,6 +113,8 @@ function toPersistedUserRecord(user: StoredUser): PersistedUserRecord {
     wantedIngredients: user.wantedIngredients,
     stripeConnectedAccountId: user.stripeConnectedAccountId,
     stripeOnboardingComplete: user.stripeOnboardingComplete,
+    activeSessionId: user.activeSessionId,
+    activeSessionIssuedAt: user.activeSessionIssuedAt,
     role: user.role,
     provider: user.provider,
     profileComplete: user.profileComplete,

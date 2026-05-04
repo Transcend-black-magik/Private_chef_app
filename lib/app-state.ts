@@ -6,7 +6,7 @@ import { firebaseAuth, waitForFirebaseAuthReady } from "@/lib/firebase";
 export type UserRole = "explorer" | "cook";
 export type AuthProvider = "email" | "google" | "apple";
 export type VerificationProvider = "manual" | "persona" | "dojah" | "smile_id";
-export type CookVerificationStatus = "not_started" | "pending_review" | "verified";
+export type CookVerificationStatus = "not_started" | "pending_review" | "verified" | "failed";
 
 export type CookVerification = {
   provider: VerificationProvider;
@@ -16,6 +16,10 @@ export type CookVerification = {
   documentType: string;
   documentNumber: string;
   submittedAt: string | null;
+  referenceId?: string;
+  verifiedAt?: string | null;
+  failureReason?: string;
+  matchScore?: number;
 };
 
 export type UserSession = {
@@ -36,6 +40,7 @@ export type StoredUser = UserSession & {
   savedCookIds?: string[];
   recommendationConsent?: boolean;
   behaviorInsightsConsent?: boolean;
+  shareReadReceipts?: boolean;
   tasteProfile?: string[];
   spicePreference?: string;
   mealTemperaturePreference?: string;
@@ -45,6 +50,8 @@ export type StoredUser = UserSession & {
   wantedIngredients?: string;
   stripeConnectedAccountId?: string;
   stripeOnboardingComplete?: boolean;
+  activeSessionId?: string;
+  activeSessionIssuedAt?: string;
   countryCode?: string;
   countryName?: string;
   addressLine1?: string;
@@ -60,6 +67,7 @@ export type StoredUser = UserSession & {
   yearsExperience?: string;
   serviceRadiusMiles?: string;
   serviceAreaLabel?: string;
+  availableMealCategories?: string[];
   safetyPractices?: string;
   cookVerification?: CookVerification | null;
   createdAt: string;
@@ -67,6 +75,7 @@ export type StoredUser = UserSession & {
 };
 
 const ONBOARDING_KEY = "cook-for-me:onboarding-seen";
+const ACTIVE_SESSION_KEY = "cook-for-me:active-session-id";
 
 export async function markOnboardingSeen() {
   await AsyncStorage.setItem(ONBOARDING_KEY, "true");
@@ -74,6 +83,29 @@ export async function markOnboardingSeen() {
 
 export async function createSession(_session: UserSession) {
   return;
+}
+
+function createSessionId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export async function registerSingleDeviceSession(user: StoredUser) {
+  const activeSessionId = createSessionId();
+  await AsyncStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+
+  const nextUser: StoredUser = {
+    ...user,
+    activeSessionId,
+    activeSessionIssuedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveUserRecord(nextUser);
+  return nextUser;
+}
+
+export async function getLocalActiveSessionId() {
+  return AsyncStorage.getItem(ACTIVE_SESSION_KEY);
 }
 
 export async function clearSession() {
@@ -256,6 +288,8 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
       typeof nextUser.behaviorInsightsConsent === "boolean"
         ? nextUser.behaviorInsightsConsent
         : undefined,
+    shareReadReceipts:
+      typeof nextUser.shareReadReceipts === "boolean" ? nextUser.shareReadReceipts : true,
     tasteProfile: Array.isArray(nextUser.tasteProfile)
       ? nextUser.tasteProfile.filter(
           (item): item is string => typeof item === "string" && item.trim().length > 0,
@@ -282,6 +316,10 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
       typeof nextUser.stripeOnboardingComplete === "boolean"
         ? nextUser.stripeOnboardingComplete
         : undefined,
+    activeSessionId:
+      typeof nextUser.activeSessionId === "string" ? nextUser.activeSessionId : undefined,
+    activeSessionIssuedAt:
+      typeof nextUser.activeSessionIssuedAt === "string" ? nextUser.activeSessionIssuedAt : undefined,
     countryCode: typeof nextUser.countryCode === "string" ? nextUser.countryCode : undefined,
     countryName: typeof nextUser.countryName === "string" ? nextUser.countryName : undefined,
     addressLine1: typeof nextUser.addressLine1 === "string" ? nextUser.addressLine1 : undefined,
@@ -305,6 +343,11 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
       typeof nextUser.serviceRadiusMiles === "string" ? nextUser.serviceRadiusMiles : undefined,
     serviceAreaLabel:
       typeof nextUser.serviceAreaLabel === "string" ? nextUser.serviceAreaLabel : undefined,
+    availableMealCategories: Array.isArray(nextUser.availableMealCategories)
+      ? nextUser.availableMealCategories.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        )
+      : undefined,
     safetyPractices:
       typeof nextUser.safetyPractices === "string" ? nextUser.safetyPractices : undefined,
     cookVerification: sanitizeCookVerification(nextUser.cookVerification),
@@ -334,7 +377,9 @@ function sanitizeCookVerification(raw: unknown): CookVerification | null {
         ? nextVerification.provider
         : "manual",
     status:
-      nextVerification.status === "verified" || nextVerification.status === "pending_review"
+      nextVerification.status === "verified" ||
+      nextVerification.status === "pending_review" ||
+      nextVerification.status === "failed"
         ? nextVerification.status
         : "not_started",
     countryCode: typeof nextVerification.countryCode === "string" ? nextVerification.countryCode : "",
@@ -345,5 +390,13 @@ function sanitizeCookVerification(raw: unknown): CookVerification | null {
       typeof nextVerification.documentNumber === "string" ? nextVerification.documentNumber : "",
     submittedAt:
       typeof nextVerification.submittedAt === "string" ? nextVerification.submittedAt : null,
+    referenceId:
+      typeof nextVerification.referenceId === "string" ? nextVerification.referenceId : undefined,
+    verifiedAt:
+      typeof nextVerification.verifiedAt === "string" ? nextVerification.verifiedAt : null,
+    failureReason:
+      typeof nextVerification.failureReason === "string" ? nextVerification.failureReason : undefined,
+    matchScore:
+      typeof nextVerification.matchScore === "number" ? nextVerification.matchScore : undefined,
   };
 }

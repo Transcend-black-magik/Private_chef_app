@@ -4,14 +4,19 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 
 import type { CookDirectoryRecord } from "@/lib/cook-data";
+import { getCookImage } from "@/lib/food-visuals";
 import { getTheme, theme } from "@/theme/theme";
 
 export default function DiscoveryCookCard({
   cook,
   compact = false,
+  hideActions = false,
+  onPress,
 }: {
   cook: CookDirectoryRecord;
   compact?: boolean;
+  hideActions?: boolean;
+  onPress?: () => void;
 }) {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
@@ -20,8 +25,17 @@ export default function DiscoveryCookCard({
   return (
     <Pressable
       style={styles.card}
-      onPress={() => router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })}
+      onPress={onPress ?? (() => router.push({ pathname: "/cooks/[id]", params: { id: cook.id } }))}
     >
+      <View style={styles.imageWrap}>
+        <Image source={getCookImage(cook.id.length + cook.name.length)} style={styles.foodImage} contentFit="cover" />
+        <View style={styles.imageShade} />
+        <View style={styles.imageBadge}>
+          <Ionicons name="star" size={13} color="#FFCA45" />
+          <Text style={styles.imageBadgeText}>{cook.verified ? "4.9" : "4.7"}</Text>
+        </View>
+      </View>
+
       <View style={styles.topRow}>
         <View style={styles.avatarBadge}>
           {cook.user.photoUrl ? (
@@ -71,7 +85,7 @@ export default function DiscoveryCookCard({
         </>
       ) : null}
 
-      <View style={styles.actionRow}>
+      {!hideActions ? <View style={styles.actionRow}>
         <Pressable
           style={styles.secondaryAction}
           onPress={() =>
@@ -94,7 +108,7 @@ export default function DiscoveryCookCard({
         >
           <Text style={styles.primaryActionText}>Book</Text>
         </Pressable>
-      </View>
+      </View> : null}
     </Pressable>
   );
 }
@@ -108,14 +122,45 @@ const createStyles = (
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: theme.radius.lg,
-      padding: compact ? theme.spacing.md : theme.spacing.lg,
+      borderRadius: 28,
+      padding: compact ? 12 : theme.spacing.md,
       gap: compact ? theme.spacing.sm : theme.spacing.md,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
+    },
+    imageWrap: {
+      height: compact ? 124 : 162,
+      borderRadius: 23,
+      overflow: "hidden",
+      backgroundColor: activeTheme.surfaceElevated,
+    },
+    foodImage: {
+      width: "100%",
+      height: "100%",
+    },
+    imageShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.12)",
+    },
+    imageBadge: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      minHeight: 30,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 10,
+      backgroundColor: "rgba(0,0,0,0.48)",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    imageBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "800",
     },
     topRow: {
       flexDirection: "row",
@@ -156,12 +201,12 @@ const createStyles = (
     },
     statusPill: {
       borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.secondaryAccent,
+      backgroundColor: activeTheme.accent,
       paddingHorizontal: 10,
       paddingVertical: 8,
     },
     statusPillVerified: {
-      backgroundColor: activeTheme.primaryDark,
+      backgroundColor: activeTheme.primary,
     },
     statusText: {
       color: "#FFFFFF",
@@ -242,10 +287,10 @@ const createStyles = (
     primaryAction: {
       flex: 1,
       minHeight: 44,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.primary,
+      backgroundColor: activeTheme.accent,
     },
     primaryActionText: {
       color: "#FFFFFF",

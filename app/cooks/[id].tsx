@@ -1,40 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
 import RoundedAvatar from "@/components/RoundedAvatar";
-import { getCurrentUserRecord, type StoredUser } from "@/lib/app-state";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
-import { getExplorerContext } from "@/lib/explorer-context";
+import { getCookImage } from "@/lib/food-visuals";
 import { isCookSaved, toggleSavedCook } from "@/lib/saved-cooks";
 import { getTheme, theme } from "@/theme/theme";
-
-function buildFitReasons(cook: CookDirectoryRecord, explorer: StoredUser | null) {
-  const reasons = [];
-
-  if (cook.verified) {
-    reasons.push("Verified identity and trust signals");
-  }
-
-  if (cook.serviceAreaLabel) {
-    reasons.push(`Works around ${cook.serviceAreaLabel}`);
-  }
-
-  if (cook.specialties[0]) {
-    reasons.push(`Known for ${cook.specialties[0]}`);
-  }
-
-  if (explorer?.city && cook.city && explorer.city.toLowerCase() === cook.city.toLowerCase()) {
-    reasons.push(`Already close to homes in ${explorer.city}`);
-  }
-
-  if (cook.profilePercent >= 100) {
-    reasons.push("Complete profile with stronger booking clarity");
-  }
-
-  return reasons.slice(0, 4);
-}
 
 export default function CookDetailScreen() {
   const colorScheme = useColorScheme();
@@ -44,35 +18,30 @@ export default function CookDetailScreen() {
   const [cook, setCook] = useState<CookDirectoryRecord | null | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [explorer, setExplorer] = useState<StoredUser | null>(null);
 
   useEffect(() => {
     async function loadCook() {
-      const [nextCook, nextIsSaved, nextExplorer] = await Promise.all([
+      const [nextCook, nextSaved] = await Promise.all([
         getCookById(params.id ?? ""),
         params.id ? isCookSaved(params.id) : Promise.resolve(false),
-        getCurrentUserRecord(),
       ]);
+
       setCook(nextCook);
-      setIsSaved(nextIsSaved);
-      setExplorer(nextExplorer);
+      setIsSaved(nextSaved);
     }
 
     void loadCook();
   }, [params.id]);
 
-  const explorerContext = useMemo(() => getExplorerContext(explorer), [explorer]);
-
-  async function handleToggleSaved() {
+  async function handleSave() {
     if (!cook || isSaving) {
       return;
     }
 
     setIsSaving(true);
-
     try {
-      const nextSavedCookIds = await toggleSavedCook(cook.id);
-      setIsSaved(nextSavedCookIds.includes(cook.id));
+      const nextSaved = await toggleSavedCook(cook.id);
+      setIsSaved(nextSaved.includes(cook.id));
     } finally {
       setIsSaving(false);
     }
@@ -81,7 +50,7 @@ export default function CookDetailScreen() {
   if (cook === undefined) {
     return (
       <View style={styles.emptyScreen}>
-        <Text style={styles.emptyTitle}>Loading cook profile...</Text>
+        <Text style={styles.emptyTitle}>Loading chef profile...</Text>
       </View>
     );
   }
@@ -89,449 +58,234 @@ export default function CookDetailScreen() {
   if (!cook) {
     return (
       <View style={styles.emptyScreen}>
-        <Text style={styles.emptyTitle}>Cook not found.</Text>
-        <Pressable style={styles.primaryButton} onPress={() => router.back()}>
-          <Text style={styles.primaryButtonText}>Go back</Text>
+        <Text style={styles.emptyTitle}>Chef profile not found.</Text>
+        <Pressable style={styles.orderButton} onPress={() => router.back()}>
+          <Text style={styles.orderButtonText}>Go back</Text>
         </Pressable>
       </View>
     );
   }
 
-  const fitReasons = buildFitReasons(cook, explorer);
-
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.heroGlow} />
-      <View style={styles.heroGlowSoft} />
+    <View style={styles.screen}>
+      <Pressable style={[styles.roundIcon, styles.backButton]} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
+      </Pressable>
+      <Pressable style={[styles.roundIcon, styles.moreButton]} onPress={() => void handleSave()}>
+        <Ionicons name={isSaved ? "heart" : "ellipsis-horizontal"} size={21} color="#FFFFFF" />
+      </Pressable>
 
-      <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={18} color={activeTheme.text} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
-        <Pressable style={styles.saveButton} onPress={() => void handleToggleSaved()}>
-          <Ionicons
-            name={isSaved ? "heart" : "heart-outline"}
-            size={18}
-            color={isSaved ? activeTheme.secondaryAccent : activeTheme.text}
-          />
-          <Text style={styles.saveButtonText}>
-            {isSaving ? "Saving..." : isSaved ? "Saved" : "Save"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.heroCard}>
-        <View style={styles.heroHeader}>
-          <RoundedAvatar
-            name={cook.name}
-            photoUrl={cook.user.photoUrl}
-            size={84}
-            backgroundColor={activeTheme.accent}
-          />
-          <View style={styles.heroCopy}>
-            <Text style={styles.eyebrow}>A cook for {explorerContext.cityLabel}</Text>
-            <Text style={styles.title}>{cook.name}</Text>
-            <Text style={styles.subtitle}>{cook.headline}</Text>
-            <Text style={styles.locationText}>
-              {cook.location} | {cook.yearsExperience} years | {cook.serviceRadiusMiles} mile reach
-            </Text>
-          </View>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+      >
+        <View style={styles.hero}>
+          <Image source={getCookImage(cook.id.length + cook.name.length)} style={styles.heroImage} contentFit="cover" />
+          <View style={styles.heroShade} />
+          <Text style={styles.accountTitle}>Account</Text>
         </View>
 
-        <View style={styles.heroMetaRow}>
-          <View style={styles.heroMetaPill}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={activeTheme.text} />
-            <Text style={styles.heroMetaText}>{cook.verified ? "Verified" : "In review"}</Text>
-          </View>
-          <View style={styles.heroMetaPill}>
-            <Ionicons name="restaurant-outline" size={14} color={activeTheme.text} />
-            <Text style={styles.heroMetaText}>{cook.specialties[0] || "Home cooking"}</Text>
-          </View>
-          <View style={styles.heroMetaPill}>
-            <Ionicons name="home-outline" size={14} color={activeTheme.text} />
-            <Text style={styles.heroMetaText}>Home-safe booking</Text>
-          </View>
-        </View>
-
-        <Text style={styles.heroBody}>
-          {explorerContext.daypartGreeting} {cook.name} feels like a strong fit for homes around {explorerContext.cityLabel} when you want less friction and more calm.
-        </Text>
-      </View>
-
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Why this cook could fit your day</Text>
-        <View style={styles.reasonList}>
-          {fitReasons.map((reason) => (
-            <View key={reason} style={styles.reasonRow}>
-              <Ionicons name="sparkles-outline" size={16} color={activeTheme.primaryDark} />
-              <Text style={styles.reasonText}>{reason}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>What booking this cook feels like</Text>
-        <Text style={styles.bodyText}>{cook.bio}</Text>
-        <View style={styles.tagRow}>
-          {(cook.specialties.length ? cook.specialties : ["Profile dishes coming soon"]).map((item) => (
-            <View key={item} style={styles.tag}>
-              <Text style={styles.tagText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.safetyCard}>
-        <Text style={styles.safetyTitle}>Safe with us from first message to final release</Text>
-        <Text style={styles.safetyBody}>
-          Your chat, booking steps, and release flow stay inside the app. We keep the process structured so you are not left handling trust on your own.
-        </Text>
-        <View style={styles.safetyPoints}>
-          <View style={styles.safetyPoint}>
-            <Ionicons name="checkmark-circle" size={16} color={activeTheme.primaryDark} />
-            <Text style={styles.safetyPointText}>In-app booking and message trail</Text>
-          </View>
-          <View style={styles.safetyPoint}>
-            <Ionicons name="checkmark-circle" size={16} color={activeTheme.primaryDark} />
-            <Text style={styles.safetyPointText}>Identity and trust signals visible before booking</Text>
-          </View>
-          <View style={styles.safetyPoint}>
-            <Ionicons name="checkmark-circle" size={16} color={activeTheme.primaryDark} />
-            <Text style={styles.safetyPointText}>A safer release flow for service completion</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Service fit around {explorerContext.cityLabel}</Text>
-        <Text style={styles.bodyText}>Main area: {cook.serviceAreaLabel}</Text>
-        <Text style={styles.bodyText}>Profile status: {cook.responseLabel}</Text>
-        <Text style={styles.bodyText}>Booking signal: {cook.priceHint}</Text>
-        <Text style={styles.bodyText}>Trust profile: {cook.profilePercent}% complete</Text>
-      </View>
-
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Trust snapshot</Text>
-        <View style={styles.badgeRow}>
-          {cook.trustBadges.length ? (
-            cook.trustBadges.map((badge) => (
-              <View key={badge} style={styles.badge}>
-                <Ionicons name="checkmark-circle" size={16} color={activeTheme.primaryDark} />
-                <Text style={styles.badgeText}>{badge}</Text>
+        <View style={styles.profileCard}>
+          <View style={styles.profileTop}>
+            <RoundedAvatar
+              name={cook.name}
+              photoUrl={cook.user.photoUrl}
+              size={58}
+              backgroundColor={activeTheme.accent}
+            />
+            <View style={styles.profileCopy}>
+              <View style={styles.nameRow}>
+                <Text numberOfLines={1} style={styles.name}>{cook.name}</Text>
+                {cook.verified ? <Ionicons name="checkmark-circle" size={16} color="#39A7FF" /> : null}
               </View>
-            ))
-          ) : (
-            <Text style={styles.bodyText}>This cook is still building out more trust details.</Text>
-          )}
-        </View>
-        <Text style={styles.bodyText}>{cook.note}</Text>
-      </View>
+              <Text style={styles.roleText}>Professional Chef</Text>
+            </View>
+            <Pressable
+              style={styles.orderButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/booking-request",
+                  params: { cookId: cook.id },
+                })
+              }
+            >
+              <Text style={styles.orderButtonText}>Order</Text>
+            </Pressable>
+          </View>
 
-      <View style={styles.actionRow}>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() =>
-            router.push({
-              pathname: "/booking-request",
-              params: { cookId: cook.id },
-            })
-          }
-        >
-          <Text style={styles.secondaryButtonText}>Start safely</Text>
-        </Pressable>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() =>
-            router.push({
-              pathname: "/booking-request",
-              params: { cookId: cook.id },
-            })
-          }
-        >
-          <Text style={styles.primaryButtonText}>Book this cook</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+          <Text style={styles.bioText}>
+            {cook.bio} <Text style={styles.readMoreText}>Read more</Text>
+          </Text>
+
+          <View style={styles.divider} />
+
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="star" size={15} color="#FFAA26" />
+              <Text style={styles.statStrong}>4.7</Text>
+              <Text style={styles.statMuted}>(311 reviews)</Text>
+            </View>
+            <View style={styles.addButton}>
+              <Ionicons name="add" size={19} color="#FF9B31" />
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="restaurant" size={15} color="#FF9B31" />
+              <Text style={styles.statStrong}>{cook.yearsExperience} years</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.reviewsHeader}>
+          <Text style={styles.reviewsTitle}>Reviews</Text>
+          <Text style={styles.viewAllText}>View all</Text>
+        </View>
+
+        <View style={styles.reviewCard}>
+          <View style={styles.reviewTop}>
+            <RoundedAvatar name="Devon Lane" size={48} backgroundColor="#F0B49B" />
+            <View style={styles.reviewCopy}>
+              <Text style={styles.reviewName}>Devon Lane</Text>
+              <Text style={styles.reviewDate}>May 24, 2020</Text>
+            </View>
+            <View style={styles.reviewRating}>
+              <Ionicons name="star" size={13} color="#FFAA26" />
+              <Text style={styles.reviewRatingText}>4.7</Text>
+            </View>
+          </View>
+          <Text style={styles.reviewBody}>
+            {cook.name.split(" ")[0]} is the best chef I have ever seen. The service was quick, calm, and delicious for everyone.
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: activeTheme.bg,
-    },
+    screen: { flex: 1, backgroundColor: activeTheme.bg },
     content: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
+      paddingHorizontal: 0,
+      paddingTop: 0,
       paddingBottom: theme.spacing.xl,
-      gap: theme.spacing.lg,
+      width: "100%",
+      alignSelf: "center",
     },
-    heroGlow: {
+    roundIcon: {
       position: "absolute",
-      top: -100,
-      right: -60,
-      width: 240,
-      height: 240,
-      borderRadius: 120,
-      backgroundColor: activeTheme.accentSoft,
-      opacity: activeTheme.bg === "#121713" ? 0.24 : 0.92,
+      top: theme.layout.screenTop,
+      zIndex: 30,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.34)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
     },
-    heroGlowSoft: {
-      position: "absolute",
-      top: 240,
-      left: -80,
-      width: 180,
-      height: 180,
-      borderRadius: 90,
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surfaceElevated : "#F6E9D8",
-      opacity: activeTheme.bg === "#121713" ? 0.5 : 0.7,
+    backButton: { left: theme.spacing.lg },
+    moreButton: { right: theme.spacing.lg },
+    hero: {
+      height: 300,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
+      justifyContent: "flex-end",
+      padding: theme.spacing.lg,
     },
-    topBar: {
+    heroImage: { ...StyleSheet.absoluteFillObject },
+    heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.22)" },
+    accountTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
+    profileCard: {
+      marginHorizontal: 0,
+      marginTop: -22,
+      borderRadius: 28,
+      backgroundColor: activeTheme.surface,
+      padding: theme.spacing.lg,
+      gap: 16,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    profileTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+    profileCopy: { flex: 1, gap: 2 },
+    nameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+    name: { flex: 1, color: activeTheme.text, fontSize: 17, fontWeight: "900" },
+    roleText: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "700" },
+    orderButton: {
+      minHeight: 44,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#FFAD5B",
+    },
+    orderButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+    bioText: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21 },
+    readMoreText: { color: "#FFAD5B", fontWeight: "900" },
+    divider: { height: 1, backgroundColor: activeTheme.border },
+    statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+    statItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+    statStrong: { color: activeTheme.text, fontSize: 13, fontWeight: "900" },
+    statMuted: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "700" },
+    addButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "#FFBD77",
+      backgroundColor: activeTheme.surface,
+    },
+    reviewsHeader: {
+      paddingHorizontal: theme.spacing.lg,
+      marginTop: 28,
+      marginBottom: 14,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 12,
     },
-    backButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    backText: {
-      color: activeTheme.text,
-      fontSize: 15,
-      fontWeight: "700",
-    },
-    saveButton: {
-      minHeight: 40,
-      paddingHorizontal: 14,
-      borderRadius: theme.radius.pill,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
+    reviewsTitle: { color: activeTheme.text, fontSize: 19, fontWeight: "900" },
+    viewAllText: { color: "#FFAD5B", fontSize: 13, fontWeight: "800" },
+    reviewCard: {
+      marginHorizontal: theme.spacing.lg,
+      borderRadius: 24,
       backgroundColor: activeTheme.surface,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    saveButtonText: { color: activeTheme.text, fontSize: 14, fontWeight: "700" },
-    heroCard: {
-      borderRadius: 32,
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.xl,
-      gap: theme.spacing.lg,
-      shadowColor: activeTheme.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      shadowOffset: { width: 0, height: 14 },
-      elevation: 6,
-    },
-    heroHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: theme.spacing.md,
-    },
-    heroCopy: {
-      flex: 1,
-      gap: 4,
-    },
-    eyebrow: {
-      color: activeTheme.primaryDark,
-      fontSize: 13,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.3,
-    },
-    title: {
-      color: activeTheme.text,
-      fontSize: 32,
-      lineHeight: 36,
-      fontWeight: "800",
-    },
-    subtitle: {
-      color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 22,
-    },
-    locationText: {
-      color: activeTheme.textMuted,
-      fontSize: 13,
-      lineHeight: 20,
-    },
-    heroMetaRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-    },
-    heroMetaPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 7,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.bg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-    },
-    heroMetaText: {
-      color: activeTheme.text,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    heroBody: {
-      color: activeTheme.text,
-      fontSize: 15,
-      lineHeight: 23,
-    },
-    sectionCard: {
-      backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
       padding: theme.spacing.lg,
-      gap: theme.spacing.md,
-    },
-    sectionTitle: {
-      color: activeTheme.text,
-      fontSize: 21,
-      fontWeight: "800",
-    },
-    bodyText: {
-      color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 23,
-    },
-    reasonList: { gap: 10 },
-    reasonRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 10,
-    },
-    reasonText: {
-      flex: 1,
-      color: activeTheme.text,
-      fontSize: 14,
-      lineHeight: 21,
-      fontWeight: "700",
-    },
-    tagRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    tag: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.surfaceElevated,
-    },
-    tagText: {
-      color: activeTheme.text,
-      fontSize: 13,
-      fontWeight: "700",
-    },
-    safetyCard: {
-      borderRadius: 30,
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surface : "#F6E8D7",
+      gap: 14,
       borderWidth: 1,
-      borderColor: activeTheme.bg === "#121713" ? activeTheme.border : "#E0C8B0",
-      padding: theme.spacing.lg,
-      gap: 12,
+      borderColor: activeTheme.border,
     },
-    safetyTitle: {
-      color: activeTheme.text,
-      fontSize: 22,
-      lineHeight: 28,
-      fontWeight: "800",
-    },
-    safetyBody: {
-      color: activeTheme.textMuted,
-      fontSize: 14,
-      lineHeight: 21,
-    },
-    safetyPoints: { gap: 8 },
-    safetyPoint: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 8,
-    },
-    safetyPointText: {
-      flex: 1,
-      color: activeTheme.text,
-      fontSize: 13,
-      lineHeight: 20,
-      fontWeight: "700",
-    },
-    badgeRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    badge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
+    reviewTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+    reviewCopy: { flex: 1 },
+    reviewName: { color: activeTheme.text, fontSize: 14, fontWeight: "900" },
+    reviewDate: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "700" },
+    reviewRating: {
+      minHeight: 32,
+      borderRadius: 10,
       paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.bg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-    },
-    badgeText: {
-      color: activeTheme.text,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    actionRow: {
       flexDirection: "row",
-      gap: 10,
-    },
-    secondaryButton: {
-      flex: 1,
-      minHeight: 54,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
       alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: activeTheme.surface,
+      gap: 4,
+      backgroundColor: activeTheme.warmSurface,
     },
-    secondaryButtonText: {
-      color: activeTheme.text,
-      fontSize: 15,
-      fontWeight: "700",
-    },
-    primaryButton: {
-      flex: 1,
-      minHeight: 54,
-      borderRadius: theme.radius.md,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: activeTheme.primary,
-    },
-    primaryButtonText: {
-      color: "#FFFFFF",
-      fontSize: 15,
-      fontWeight: "800",
-    },
+    reviewRatingText: { color: "#FF9B31", fontSize: 13, fontWeight: "900" },
+    reviewBody: { color: activeTheme.text, fontSize: 13, lineHeight: 20 },
     emptyScreen: {
       flex: 1,
-      backgroundColor: activeTheme.bg,
-      paddingHorizontal: theme.spacing.lg,
       alignItems: "center",
       justifyContent: "center",
-      gap: theme.spacing.lg,
+      gap: 14,
+      backgroundColor: activeTheme.bg,
+      padding: theme.spacing.lg,
     },
-    emptyTitle: {
-      color: activeTheme.text,
-      fontSize: 24,
-      fontWeight: "800",
-      textAlign: "center",
-    },
+    emptyTitle: { color: activeTheme.text, fontSize: 22, fontWeight: "900", textAlign: "center" },
   });

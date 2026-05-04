@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -10,8 +12,6 @@ import {
   useColorScheme,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
 import RoundedAvatar from "@/components/RoundedAvatar";
 import { matchesAccountIdentifier } from "@/lib/account-identity";
@@ -259,6 +259,8 @@ export default function ChatThreadScreen() {
         style={styles.messagesScreen}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
         data={chatItems}
         keyExtractor={(item) => item.id}
         onContentSizeChange={() => scrollToLatest(messages.length < 8)}
@@ -280,6 +282,7 @@ export default function ChatThreadScreen() {
                 message.createdAt &&
                 new Date(partnerReadAt).getTime() >= new Date(message.createdAt).getTime(),
             );
+          const isDelivered = mine && (isRead || Boolean(partnerPresence?.isOnline));
 
           return (
             <View style={[styles.messageBubble, mine ? styles.myBubble : styles.otherBubble]}>
@@ -291,9 +294,9 @@ export default function ChatThreadScreen() {
                 </Text>
                 {mine ? (
                   <Ionicons
-                    name="checkmark-done"
+                    name={isDelivered ? "checkmark-done" : "checkmark"}
                     size={14}
-                    color={isRead ? "#FFFFFF" : "rgba(255,255,255,0.72)"}
+                    color={isRead ? "#8EE6FF" : "rgba(255,255,255,0.72)"}
                   />
                 ) : null}
               </View>
@@ -462,3 +465,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       paddingBottom: theme.spacing.md,
     },
   });
+
+
+

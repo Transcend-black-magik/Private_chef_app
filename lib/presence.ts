@@ -1,5 +1,6 @@
 import {
   getDatabase,
+  get,
   off,
   onDisconnect,
   onValue,
@@ -10,7 +11,7 @@ import {
 
 import { toSafeFieldKey, uniqueStrings } from "@/lib/account-identity";
 import type { UserSession, StoredUser } from "@/lib/app-state";
-import { firebaseApp } from "@/lib/firebase";
+import { firebaseApp, firebaseConfig } from "@/lib/firebase";
 
 type PresenceAccount = Pick<UserSession, "id" | "email" | "role" | "name"> &
   Partial<Pick<StoredUser, "photoUrl">>;
@@ -22,7 +23,9 @@ export type PresenceState = {
   role?: "explorer" | "cook";
 };
 
-const databaseUrl = process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL;
+const databaseUrl =
+  process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL ||
+  (firebaseConfig.projectId ? `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com` : "");
 
 function getPresenceDatabase() {
   if (!firebaseApp || !databaseUrl) {
@@ -140,4 +143,32 @@ export function subscribeToPresence(
   return () => {
     unsubscribeCallbacks.forEach((unsubscribe) => unsubscribe());
   };
+}
+
+export async function isAnyAccountIdentifierOnline(identifiers: string[]) {
+  const uniqueIdentifiers = uniqueStrings(identifiers);
+
+  if (!uniqueIdentifiers.length) {
+    return false;
+  }
+
+  const snapshots = await Promise.all(
+    uniqueIdentifiers.map(async (identifier) => {
+      const nextPresenceRef = presenceRef(identifier);
+      if (!nextPresenceRef) {
+        return null;
+      }
+
+      try {
+        return await get(nextPresenceRef);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return snapshots.some((snapshot) => {
+    const value = snapshot?.val() as PresenceState | null | undefined;
+    return Boolean(value?.isOnline);
+  });
 }

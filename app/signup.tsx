@@ -138,6 +138,8 @@ export default function SignUpScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
       >
         <View style={styles.heroGlow} />
         <View style={styles.heroGlowSecondary} />

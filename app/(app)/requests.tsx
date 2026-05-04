@@ -5,7 +5,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Platform,
   useColorScheme,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -20,6 +22,8 @@ import {
   completeBookingAsCook,
   counterBookingOfferAsCook,
   declineBookingAsCook,
+  isBookingThreadOpenWindow,
+  isBookingThreadBlocked,
   serviceKindLabel,
   subscribeToBookingsForCurrentUser,
   type BookingRecord,
@@ -36,7 +40,9 @@ type ActionState =
 export default function RequestsScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
-  const styles = createStyles(activeTheme);
+  const { width } = useWindowDimensions();
+  const isWideWeb = Platform.OS === "web" && width >= 900;
+  const styles = createStyles(activeTheme, isWideWeb);
   const [requests, setRequests] = useState<BookingRecord[]>([]);
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -149,9 +155,18 @@ export default function RequestsScreen() {
     .filter((group) => group.length > 0);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.screen}>
+      <View style={styles.backgroundBand} />
+      <View style={styles.backgroundTile} />
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Requests</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.kicker}>Cook workspace</Text>
+          <Text style={styles.title}>Requests</Text>
+          <Text style={styles.subtitle}>Review grouped explorer requests, counter offers, and service updates.</Text>
+        </View>
         <View style={styles.headerActions}>
           <View style={styles.headerPill}>
             <Text style={styles.headerPillText}>{needsReplyCount}</Text>
@@ -196,7 +211,8 @@ export default function RequestsScreen() {
               </View>
 
               {group.map((item) => {
-                const blocked = item.status === "cancelled" || item.status === "declined";
+                const blocked = isBookingThreadBlocked(item);
+                const canOpenThread = !blocked && isBookingThreadOpenWindow(item);
                 const isExpanded = expandedId === item.id;
 
                 return (
@@ -221,6 +237,25 @@ export default function RequestsScreen() {
                       </View>
                     </Pressable>
 
+                    <View style={styles.summaryStrip}>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Payout</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatCurrency(item.payoutAmount, item.explorerCountryCode)}
+                        </Text>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Mode</Text>
+                        <Text style={styles.summaryValue}>
+                          {item.serviceMode === "cook_home" ? "Cook home" : "Explorer home"}
+                        </Text>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Guests</Text>
+                        <Text style={styles.summaryValue}>{item.guestCount || "1"}</Text>
+                      </View>
+                    </View>
+
                     {isExpanded ? (
                       <>
                         <Text style={styles.requestDetail}>Area: {item.areaLabel}</Text>
@@ -242,7 +277,7 @@ export default function RequestsScreen() {
                         {item.cancellationReason ? <Text style={styles.requestNote}>Reason: {item.cancellationReason}</Text> : null}
 
                         <View style={styles.actionRow}>
-                          {!blocked && item.status !== "accepted" ? (
+                          {!item.instantMatch && !blocked && item.status !== "accepted" ? (
                             <Pressable
                               style={styles.secondaryButton}
                               onPress={() => openAction({ type: "accept", booking: item })}
@@ -250,7 +285,7 @@ export default function RequestsScreen() {
                               <Text style={styles.secondaryButtonText}>Accept</Text>
                             </Pressable>
                           ) : null}
-                          {!blocked ? (
+                          {!item.instantMatch && !blocked ? (
                             <Pressable
                               style={styles.secondaryButton}
                               onPress={() => openAction({ type: "counter", booking: item })}
@@ -263,10 +298,12 @@ export default function RequestsScreen() {
                               style={styles.secondaryButton}
                               onPress={() => openAction({ type: "decline", booking: item })}
                             >
-                              <Text style={styles.secondaryButtonText}>Decline</Text>
+                              <Text style={styles.secondaryButtonText}>
+                                {item.instantMatch ? "Cancel" : "Decline"}
+                              </Text>
                             </Pressable>
                           ) : null}
-                          {item.status === "accepted" ? (
+                          {!item.instantMatch && item.status === "accepted" ? (
                             <Pressable
                               style={styles.primaryButton}
                               onPress={() => openAction({ type: "complete", booking: item })}
@@ -274,7 +311,22 @@ export default function RequestsScreen() {
                               <Text style={styles.primaryButtonText}>Mark done</Text>
                             </Pressable>
                           ) : null}
-                          {!blocked ? (
+                          {item.instantMatch && !blocked ? (
+                            <Pressable
+                              style={styles.secondaryButton}
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/live-service/[bookingId]",
+                                  params: { bookingId: item.id },
+                                } as never)
+                              }
+                            >
+                              <Text style={styles.secondaryButtonText}>
+                                {item.deliveryMode === "dispatch" ? "Home address" : "Live direction"}
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                          {canOpenThread ? (
                             <Pressable
                               style={styles.secondaryButton}
                               onPress={() =>
@@ -288,7 +340,9 @@ export default function RequestsScreen() {
                             </Pressable>
                           ) : (
                             <View style={styles.blockedPill}>
-                              <Text style={styles.blockedPillText}>Thread blocked</Text>
+                              <Text style={styles.blockedPillText}>
+                                {blocked ? "Thread closed" : "Thread opens near service time"}
+                              </Text>
                             </View>
                           )}
                         </View>
@@ -359,27 +413,69 @@ export default function RequestsScreen() {
           subtitle="We're saving this change and updating the explorer in real time."
         />
       ) : null}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
+const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boolean) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: activeTheme.bg },
+    scrollArea: { flex: 1 },
+    backgroundBand: {
+      position: "absolute",
+      top: -70,
+      left: -40,
+      right: -40,
+      height: 230,
+      borderBottomLeftRadius: 48,
+      borderBottomRightRadius: 48,
+      backgroundColor: activeTheme.warmSurface,
+      transform: [{ rotate: "-3deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 1 : 0.14,
+    },
+    backgroundTile: {
+      position: "absolute",
+      top: 128,
+      right: -82,
+      width: 220,
+      height: 130,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.safeSurface,
+      transform: [{ rotate: "12deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.72 : 0.12,
+    },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
       paddingBottom: 120,
-      gap: theme.spacing.md,
+      gap: theme.spacing.lg,
+      width: "100%",
+      maxWidth: isWideWeb ? 980 : undefined,
+      alignSelf: "center",
     },
     headerRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
-      marginBottom: theme.spacing.sm,
+      borderRadius: 34,
+      padding: theme.spacing.lg,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
+    headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-    title: { color: activeTheme.text, fontSize: 30, lineHeight: 34, fontWeight: "800" },
+    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
+    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
@@ -405,7 +501,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     stack: { gap: theme.spacing.md },
     emptyCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 28,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
@@ -415,23 +511,28 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
     groupCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 28,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 3,
     },
     groupHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
     groupCopy: { flex: 1, gap: 2 },
     groupTitle: { color: activeTheme.text, fontSize: 18, fontWeight: "800" },
     groupMeta: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "600" },
     requestCard: {
-      borderRadius: theme.radius.md,
+      borderRadius: 24,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.md,
-      gap: 10,
-      backgroundColor: activeTheme.bg,
+      gap: 12,
+      backgroundColor: activeTheme.surfaceElevated,
     },
     requestHeaderButton: {
       flexDirection: "row",
@@ -451,13 +552,37 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     statusText: { color: activeTheme.accent, fontSize: 13, fontWeight: "800" },
     requestTitle: { color: activeTheme.text, fontSize: 17, fontWeight: "800" },
     requestTime: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "600" },
+    summaryStrip: {
+      flexDirection: "row",
+      gap: 8,
+      borderRadius: 18,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: 8,
+    },
+    summaryItem: {
+      flex: 1,
+      gap: 2,
+    },
+    summaryLabel: {
+      color: activeTheme.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    summaryValue: {
+      color: activeTheme.text,
+      fontSize: 12,
+      fontWeight: "900",
+    },
     requestDetail: { color: activeTheme.text, fontSize: 14, lineHeight: 22 },
     requestNote: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 20 },
     actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2 },
     secondaryButton: {
       minHeight: 42,
       paddingHorizontal: 14,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       borderWidth: 1,
       borderColor: activeTheme.border,
       alignItems: "center",
@@ -468,7 +593,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     primaryButton: {
       minHeight: 42,
       paddingHorizontal: 14,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: activeTheme.primary,

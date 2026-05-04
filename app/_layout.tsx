@@ -5,6 +5,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 
 import AnimatedSplashScreen from "@/components/AnimatedSplashScreen";
+import AppBootScreen from "@/components/AppBootScreen";
+import { getSession } from "@/lib/app-state";
+import { startPresenceTracking } from "@/lib/presence";
 import { getTheme } from "@/theme/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -33,8 +36,25 @@ export default function RootLayout() {
     }
   }, [appReady]);
 
+  useEffect(() => {
+    if (!appReady || showAnimatedSplash) {
+      return;
+    }
+
+    let stopPresence: () => void = () => undefined;
+
+    async function trackPresence() {
+      const session = await getSession();
+      stopPresence = startPresenceTracking(session);
+    }
+
+    void trackPresence();
+
+    return () => stopPresence();
+  }, [appReady, showAnimatedSplash]);
+
   if (!appReady) {
-    return null;
+    return <AppBootScreen />;
   }
 
   if (showAnimatedSplash) {
@@ -43,7 +63,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+      <StatusBar style="light" translucent backgroundColor="transparent" />
       <Stack
         screenOptions={{
           headerShown: false,

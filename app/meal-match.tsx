@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 
+import { heroFoodImages } from "@/lib/food-visuals";
 import { buildMealSuggestions, type MealSignal } from "@/lib/meal-guide";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -52,12 +54,16 @@ export default function MealMatchScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backText}>Back</Text>
       </Pressable>
 
       <View style={styles.headerBlock}>
+        <Image source={heroFoodImages.salad} style={styles.heroImage} contentFit="cover" />
+        <View style={styles.heroShade} />
         <Text style={styles.eyebrow}>Taste guide</Text>
         <Text style={styles.title}>Let the app help you decide what to eat.</Text>
         <Text style={styles.subtitle}>
@@ -183,10 +189,20 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     backButton: { alignSelf: "flex-start" },
     backText: { color: activeTheme.text, fontSize: 15, fontWeight: "700" },
-    headerBlock: { gap: 8 },
-    eyebrow: { color: activeTheme.primaryDark, fontSize: 14, fontWeight: "800" },
-    title: { color: activeTheme.text, fontSize: 31, lineHeight: 38, fontWeight: "800" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 15, lineHeight: 23 },
+    headerBlock: {
+      minHeight: 280,
+      borderRadius: 34,
+      overflow: "hidden",
+      padding: theme.spacing.lg,
+      justifyContent: "flex-end",
+      gap: 8,
+      backgroundColor: activeTheme.primaryDark,
+    },
+    heroImage: { ...StyleSheet.absoluteFillObject },
+    heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
+    eyebrow: { color: "#FFE0BD", fontSize: 14, fontWeight: "900" },
+    title: { color: "#FFFFFF", fontSize: 31, lineHeight: 38, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 15, lineHeight: 23 },
     quizCard: {
       backgroundColor: activeTheme.surface,
       borderRadius: theme.radius.lg,

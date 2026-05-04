@@ -47,7 +47,9 @@ export default function AllCooksScreen() {
   const cooks = useMemo(() => sortCooks(directory, sortMode), [directory, sortMode]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="chevron-back" size={18} color={activeTheme.text} />
         <Text style={styles.backText}>Back</Text>
@@ -58,7 +60,9 @@ export default function AllCooksScreen() {
         <Text style={styles.subtitle}>Browse the full directory for {explorerContext.cityLabel} with a calmer sort system instead of a crowded home screen.</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never" contentContainerStyle={styles.sortRow}>
         {sortOptions.map((option) => {
           const active = option.value === sortMode;
           return (

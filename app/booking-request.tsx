@@ -13,11 +13,13 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { Image } from "expo-image";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import { getCurrentUserRecord } from "@/lib/app-state";
 import type { CookDirectoryRecord } from "@/lib/cook-data";
 import { formatCurrency } from "@/lib/currency";
+import { heroFoodImages } from "@/lib/food-visuals";
 import {
   COOK_FEE_RATE,
   COMMISSION_RATE,
@@ -32,7 +34,7 @@ export default function BookingRequestScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
   const styles = createStyles(activeTheme);
-  const params = useLocalSearchParams<{ cookId?: string }>();
+  const params = useLocalSearchParams<{ cookId?: string; dish?: string }>();
   const [cook, setCook] = useState<CookDirectoryRecord | null | undefined>(undefined);
   const [dishSummary, setDishSummary] = useState("");
   const [serviceDateLabel, setServiceDateLabel] = useState("");
@@ -65,6 +67,7 @@ export default function BookingRequestScreen() {
 
       setCook(nextCook);
       setAreaLabel(nextCook?.serviceAreaLabel || nextCook?.location || "");
+      setDishSummary(params.dish || "");
       setCountryCode(currentUser?.countryCode || "US");
       setWantedInMeal(currentUser?.wantedIngredients || "");
       setAvoidInMeal(currentUser?.dislikedIngredients || "");
@@ -73,7 +76,7 @@ export default function BookingRequestScreen() {
     }
 
     void loadCook();
-  }, [params.cookId]);
+  }, [params.cookId, params.dish]);
 
   const bookingDateSummary = useMemo(() => {
     if (!serviceDate) {
@@ -215,6 +218,8 @@ export default function BookingRequestScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
       >
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={18} color={activeTheme.text} />
@@ -222,6 +227,8 @@ export default function BookingRequestScreen() {
         </Pressable>
 
         <View style={styles.headerBlock}>
+          <Image source={heroFoodImages.platter} style={styles.headerImage} contentFit="cover" />
+          <View style={styles.headerShade} />
           <Text style={styles.eyebrow}>Booking request</Text>
           <Text style={styles.title}>Book {currentCook.name} the safe way.</Text>
           <Text style={styles.subtitle}>
@@ -512,6 +519,9 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       paddingTop: theme.layout.screenTop,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.lg,
+      width: "100%",
+      maxWidth: Platform.OS === "web" ? 1040 : undefined,
+      alignSelf: "center",
     },
     loadingScreen: {
       flex: 1,
@@ -522,15 +532,25 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     loadingText: { color: activeTheme.text, fontSize: 16, fontWeight: "700" },
     backButton: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
     backText: { color: activeTheme.text, fontSize: 15, fontWeight: "700" },
-    headerBlock: { gap: theme.spacing.xs },
-    eyebrow: { color: activeTheme.primaryDark, fontSize: 14, fontWeight: "800" },
-    title: { color: activeTheme.text, fontSize: 31, lineHeight: 37, fontWeight: "800" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 15, lineHeight: 23 },
+    headerBlock: {
+      minHeight: 260,
+      borderRadius: 34,
+      overflow: "hidden",
+      padding: theme.spacing.lg,
+      justifyContent: "flex-end",
+      gap: theme.spacing.xs,
+      backgroundColor: activeTheme.primaryDark,
+    },
+    headerImage: { ...StyleSheet.absoluteFillObject },
+    headerShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+    eyebrow: { color: "#FFE0BD", fontSize: 14, fontWeight: "900" },
+    title: { color: "#FFFFFF", fontSize: 31, lineHeight: 37, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.84)", fontSize: 15, lineHeight: 23 },
     card: {
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: theme.radius.lg,
+      borderRadius: 28,
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
     },
@@ -540,7 +560,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       backgroundColor: activeTheme.surfaceElevated,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       paddingHorizontal: theme.spacing.md,
       paddingVertical: 16,
       color: activeTheme.text,
@@ -620,7 +640,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     primaryButton: {
       minHeight: 56,
       borderRadius: theme.radius.md,
-      backgroundColor: activeTheme.primary,
+      backgroundColor: activeTheme.accent,
       alignItems: "center",
       justifyContent: "center",
     },

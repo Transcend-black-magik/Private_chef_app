@@ -37,7 +37,9 @@ export default function SavedCooksScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="chevron-back" size={18} color={activeTheme.text} />
         <Text style={styles.backText}>Back</Text>

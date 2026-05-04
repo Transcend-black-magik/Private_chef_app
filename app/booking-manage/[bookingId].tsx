@@ -71,6 +71,8 @@ export default function BookingManageScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
       >
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={18} color={activeTheme.text} />

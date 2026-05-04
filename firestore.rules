@@ -61,6 +61,8 @@ service cloud.firestore {
         "cancellationReason",
         "fundsReleaseStatus",
         "trustReleaseConfirmed",
+        "instantMatch",
+        "deliveryMode",
         "status",
         "updatedAt"
       ];
@@ -79,6 +81,7 @@ service cloud.firestore {
         "latestOfferNote",
         "negotiationOpen",
         "cancellationReason",
+        "deliveryMode",
         "status",
         "updatedAt"
       ];

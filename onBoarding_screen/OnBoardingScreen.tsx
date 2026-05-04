@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { UserRole } from "@/lib/app-state";
+import { heroFoodImages } from "@/lib/food-visuals";
 import { getTheme, theme } from "@/theme/theme";
 
 const lightLogo = require("../assets/images/logo_light.png");
@@ -33,9 +34,10 @@ export default function OnBoardingScreen({
 }: OnBoardingScreenProps) {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
-  const styles = createStyles(activeTheme);
+  const { width, height } = useWindowDimensions();
+  const isShortScreen = height < 760;
+  const styles = createStyles(activeTheme, isShortScreen);
   const logoSource = colorScheme === "dark" ? darkLogo : lightLogo;
-  const { width } = useWindowDimensions();
   const [showChoices, setShowChoices] = useState(initialStep === "choices");
   const sliderX = useRef(new Animated.Value(0)).current;
   const introTranslateX = useRef(new Animated.Value(initialStep === "choices" ? -32 : 0)).current;
@@ -115,12 +117,16 @@ export default function OnBoardingScreen({
       <View style={styles.heroGlow} />
 
       <View style={styles.content}>
-        <Image source={logoSource} style={styles.badgeImage} resizeMode="cover" />
+        <View style={styles.visualCard}>
+          <Image source={{ uri: heroFoodImages.chef }} style={styles.visualImage} resizeMode="cover" />
+          <View style={styles.visualShade} />
+          <Image source={logoSource} style={styles.badgeImage} resizeMode="cover" />
+        </View>
 
         {!showChoices ? (
           <Animated.View
             style={{
-              gap: theme.spacing.lg,
+              gap: theme.spacing.md,
               opacity: introOpacity,
               transform: [{ translateX: introTranslateX }],
             }}
@@ -176,7 +182,7 @@ export default function OnBoardingScreen({
         ) : (
           <Animated.View
             style={{
-              gap: theme.spacing.lg,
+              gap: theme.spacing.md,
               opacity: choicesOpacity,
               transform: [{ translateX: choicesTranslateX }],
             }}
@@ -231,15 +237,15 @@ export default function OnBoardingScreen({
   );
 }
 
-const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
+const createStyles = (activeTheme: ReturnType<typeof getTheme>, isShortScreen: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: activeTheme.bg,
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xxl + 16,
-      paddingBottom: theme.spacing.xl,
-      justifyContent: "space-between",
+      paddingTop: isShortScreen ? theme.spacing.md : theme.spacing.xl,
+      paddingBottom: isShortScreen ? theme.spacing.md : theme.spacing.xl,
+      justifyContent: "center",
     },
     heroGlow: {
       position: "absolute",
@@ -252,32 +258,58 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       opacity: colorSchemeOpacity(activeTheme.bg),
     },
     content: {
-      flex: 1,
       justifyContent: "center",
-      gap: theme.spacing.lg,
+      gap: isShortScreen ? 10 : theme.spacing.md,
+    },
+    visualCard: {
+      height: isShortScreen ? 154 : 218,
+      borderRadius: 34,
+      overflow: "hidden",
+      backgroundColor: "#14160F",
+      justifyContent: "flex-end",
+      padding: isShortScreen ? theme.spacing.md : theme.spacing.lg,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 7,
+    },
+    visualImage: {
+      position: "absolute",
+      top: -3,
+      right: -3,
+      bottom: -3,
+      left: -3,
+      width: undefined,
+      height: undefined,
+      transform: [{ scale: 1.04 }],
+    },
+    visualShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.28)",
     },
     badgeImage: {
-      marginLeft: -80,
-      width: 250,
-      height: 100,
+      width: isShortScreen ? 154 : 210,
+      height: isShortScreen ? 62 : 84,
+      marginLeft: isShortScreen ? -48 : -66,
     },
     title: {
       color: activeTheme.text,
-      fontSize: 38,
-      lineHeight: 48,
+      fontSize: isShortScreen ? 26 : 34,
+      lineHeight: isShortScreen ? 31 : 40,
       fontWeight: "800",
       maxWidth: 320,
     },
     subtitle: {
       color: activeTheme.textMuted,
-      fontSize: 17,
-      lineHeight: 26,
+      fontSize: isShortScreen ? 13 : 16,
+      lineHeight: isShortScreen ? 18 : 23,
       maxWidth: 340,
     },
     card: {
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
-      padding: theme.spacing.lg,
+      borderRadius: 28,
+      padding: isShortScreen ? theme.spacing.sm : theme.spacing.md,
       borderWidth: 1,
       borderColor: activeTheme.border,
       shadowColor: activeTheme.shadow,
@@ -293,9 +325,9 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       gap: theme.spacing.md,
     },
     iconPlate: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
+      width: isShortScreen ? 42 : 52,
+      height: isShortScreen ? 42 : 52,
+      borderRadius: isShortScreen ? 21 : 26,
       backgroundColor: activeTheme.accentSoft,
       alignItems: "center",
       justifyContent: "center",
@@ -318,14 +350,15 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     cardTitle: {
       color: activeTheme.text,
-      fontSize: 18,
-      lineHeight: 24,
+      fontSize: isShortScreen ? 15 : 18,
+      lineHeight: isShortScreen ? 20 : 24,
       fontWeight: "700",
     },
     featureRow: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: theme.spacing.sm,
+      display: isShortScreen ? "none" : "flex",
     },
     featurePill: {
       backgroundColor: activeTheme.bg,
@@ -355,9 +388,9 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       marginTop: theme.spacing.xs,
     },
     sliderTrack: {
-      height: 68,
+      height: isShortScreen ? 58 : 68,
       borderRadius: 34,
-      backgroundColor: activeTheme.surface,
+      backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
       borderColor: activeTheme.border,
       justifyContent: "center",
@@ -365,7 +398,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       overflow: "hidden",
     },
     sliderLabel: {
-      color: activeTheme.text,
+      color: "#FFFFFF",
       fontSize: 16,
       fontWeight: "800",
       textAlign: "center",
@@ -397,15 +430,17 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       fontWeight: "600",
     },
     actions: {
-      gap: theme.spacing.sm,
-      marginTop: theme.spacing.xs,
-      paddingBottom: theme.spacing.sm,
+      gap: isShortScreen ? 8 : theme.spacing.sm,
+      marginTop: 0,
+      paddingBottom: 0,
+      marginBottom: 0,
     },
     primaryButton: {
-      backgroundColor: activeTheme.primary,
-      paddingVertical: 18,
+      backgroundColor: activeTheme.accent,
+      minHeight: isShortScreen ? 48 : 56,
       borderRadius: theme.radius.md,
       alignItems: "center",
+      justifyContent: "center",
     },
     primaryButtonText: {
       color: "#FFFFFF",
@@ -416,9 +451,10 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       backgroundColor: activeTheme.surface,
       borderColor: activeTheme.border,
       borderWidth: 1,
-      paddingVertical: 18,
+      minHeight: isShortScreen ? 48 : 56,
       borderRadius: theme.radius.md,
       alignItems: "center",
+      justifyContent: "center",
     },
     secondaryButtonText: {
       color: activeTheme.text,
@@ -427,9 +463,10 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     signInLink: {
       alignItems: "center",
-      paddingTop: 6,
+      paddingTop: isShortScreen ? 2 : 6,
+      minHeight: 30,
       alignSelf: "center",
-      marginTop: theme.spacing.xs,
+      marginTop: 0,
     },
     signInText: {
       color: activeTheme.accent,

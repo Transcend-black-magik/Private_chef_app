@@ -1,45 +1,71 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
+import RoundedAvatar from "@/components/RoundedAvatar";
 import { getCurrentUserRecord } from "@/lib/app-state";
 import {
-  cuisineChips,
   fetchCookDirectory,
   sortCooks,
   type CookDirectoryRecord,
 } from "@/lib/cook-data";
 import { getExplorerContext } from "@/lib/explorer-context";
+import {
+  foodCategories,
+  getCookImage,
+  heroFoodImages,
+} from "@/lib/food-visuals";
 import { getProfileCompletion, getProfileCompletionCopy } from "@/lib/profile-completion";
+import { recipeRecommendations } from "@/lib/recipe-data";
 import { getTheme, theme } from "@/theme/theme";
+
+const logoLight = require("../../assets/images/logo_light.png");
+const logoDark = require("../../assets/images/logo_dark.png");
+
+const quickActions = [
+  { label: "Gym", icon: "barbell-outline" as const, route: "/gym" as const },
+  { label: "Taste guide", icon: "sparkles-outline" as const, route: "/meal-match" as const },
+  { label: "Recipe", icon: "book-outline" as const, route: "/recipes" as const },
+  { label: "Assistant", icon: "color-wand-outline" as const, route: "/cooking-assistant" as const },
+];
 
 const moodPrompts = [
   { label: "Dinner tonight", query: "Dinner tonight", icon: "moon-outline" as const },
   { label: "Meal prep", query: "Meal prep", icon: "calendar-clear-outline" as const },
-  { label: "Family visit", query: "Family trays", icon: "people-outline" as const },
-  { label: "Quiet handoff", query: "Cook at my home", icon: "key-outline" as const },
+  { label: "Family trays", query: "Family trays", icon: "people-outline" as const },
+  { label: "Healthy focus", query: "Healthy", icon: "leaf-outline" as const },
 ];
 
 export default function ExploreScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
-  const styles = createStyles(activeTheme);
-
-  const [firstName, setFirstName] = useState("Friend");
+  const { width } = useWindowDimensions();
+  const isWideWeb = Platform.OS === "web" && width >= 900;
+  const styles = createStyles(activeTheme, isWideWeb);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const [directory, setDirectory] = useState<CookDirectoryRecord[]>([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true);
   const [profilePercent, setProfilePercent] = useState(0);
   const [explorerContext, setExplorerContext] = useState(() => getExplorerContext(null));
+  const [savedDishOfWeek, setSavedDishOfWeek] = useState(false);
+  const profileCopy = getProfileCompletionCopy("explorer");
 
   useEffect(() => {
     async function loadExploreContext() {
       const [user, cooks] = await Promise.all([getCurrentUserRecord(), fetchCookDirectory()]);
 
       if (user) {
-        const name = (user.name.trim().split(" ")[0] || "Friend").replace(/[^a-zA-Z'-]/g, "");
-        setFirstName(name || "Friend");
         setProfilePercent(getProfileCompletion(user).percent);
         setExplorerContext(getExplorerContext(user));
       }
@@ -51,262 +77,389 @@ export default function ExploreScreen() {
     void loadExploreContext();
   }, []);
 
-  const profileCopy = getProfileCompletionCopy("explorer");
   const popularCooks = useMemo(() => sortCooks(directory, "popular"), [directory]);
-  const verifiedCooks = useMemo(
-    () => sortCooks(directory.filter((cook) => cook.verified), "verified"),
-    [directory],
-  );
-  const completeProfileCooks = useMemo(
-    () => sortCooks(directory.filter((cook) => cook.profilePercent >= 100), "complete"),
-    [directory],
-  );
   const featuredCook = popularCooks[0] ?? null;
-  const quickMatches = popularCooks.slice(1, 5);
-  const trustedLane = verifiedCooks.slice(0, 6);
-  const polishedLane = completeProfileCooks.slice(0, 6);
-  const tasteIdeas = cuisineChips.filter((chip) => chip !== "All").slice(0, 5);
+  const quickMatches = popularCooks.slice(0, 5);
+  const previewCook = featuredCook ?? {
+    id: "preview",
+    name: "Amaka's Kitchen",
+    headline: "Warm bowls, family trays, and quiet handoff meals around your area.",
+    location: explorerContext.cityLabel,
+    specialties: ["Jollof", "Meal prep"],
+    verified: true,
+    profilePercent: 100,
+    serviceAreaLabel: explorerContext.cityLabel,
+    user: { photoUrl: "" },
+  };
+  const logoOpacity = scrollY.interpolate({
+    inputRange: [220, 285],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.topGlow} />
-      <View style={styles.sideGlow} />
+    <View style={styles.screen}>
+      <View style={styles.backgroundBand} />
+      <View style={styles.backgroundTile} />
+      {!isWideWeb ? (
+        <Animated.View pointerEvents="none" style={[styles.floatingLogo, { opacity: logoOpacity }]}>
+          <Image
+            source={colorScheme === "dark" ? logoDark : logoLight}
+            style={styles.floatingLogoImage}
+            contentFit="contain"
+          />
+        </Animated.View>
+      ) : null}
+      <Animated.ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={[styles.content, isWideWeb && styles.contentWide]}
+        showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+      >
+      <View style={[styles.heroPanel, !isWideWeb && styles.heroPanelMobileFullBleed]}>
+        <View style={styles.heroImageLayer}>
+          <Image source={heroFoodImages.explorer} style={styles.heroImage} contentFit="cover" />
+        </View>
+        <View style={styles.heroShade} />
+        <View style={styles.heroTopRow}>
+          <View>
+            <Text style={styles.heroHello}>Hello,</Text>
+            <Text style={styles.heroTitle}>What would you like to cook today?</Text>
+          </View>
+          <Pressable style={styles.iconButton} onPress={() => router.push("/bookmark" as never)}>
+            <Ionicons name="bookmark-outline" size={21} color="#171713" />
+          </Pressable>
+        </View>
+        <Pressable style={styles.searchBar} onPress={() => router.push("/search")}>
+          <Ionicons name="search" size={18} color={activeTheme.textMuted} />
+          <Text style={styles.searchText}>Search cooks, dishes, or your area</Text>
+          <Ionicons name="options-outline" size={18} color={activeTheme.textMuted} />
+        </Pressable>
+      </View>
 
-      <View style={styles.headerBlock}>
-        <Text style={styles.eyebrow}>Explorer home</Text>
-        <Text style={styles.title}>Find the right cook for today, {firstName}.</Text>
-        <Text style={styles.subtitle}>
-          Trusted cooks around {explorerContext.cityLabel}, ready when you need them.
-        </Text>
+      <View style={styles.quickActionRow}>
+        {quickActions.map((item) => (
+          <Pressable
+            key={item.label}
+            style={styles.quickAction}
+            onPress={() => router.push(item.route as never)}
+    >
+            <Ionicons name={item.icon} size={20} color={activeTheme.primaryDark} />
+            <Text style={styles.quickActionText}>{item.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
       {profilePercent < 100 ? (
-        <Pressable style={styles.completeProfileCard} onPress={() => router.push("/complete-profile")}>
-          <View style={styles.completeProfileTop}>
-            <View style={styles.completeProfileCopy}>
-              <Text style={styles.completeProfileTitle}>{profileCopy.title}</Text>
-              <Text style={styles.completeProfileSubtitle}>{profileCopy.subtitle}</Text>
+        <Pressable style={styles.progressCard} onPress={() => router.push("/complete-profile")}>
+          <Image source={heroFoodImages.assistant} style={styles.progressImage} contentFit="cover" />
+          <View style={styles.progressImageShade} />
+          <View style={styles.progressContent}>
+            <View style={styles.progressTop}>
+              <View style={styles.progressCopy}>
+                <Text style={styles.progressEyebrow}>Profile setup</Text>
+                <Text style={styles.progressTitle}>{profileCopy.title}</Text>
+                <Text style={styles.progressBody}>{profileCopy.subtitle}</Text>
+              </View>
+              <View style={styles.progressBadge}>
+                <Text style={styles.progressBadgeText}>{profilePercent}%</Text>
+              </View>
             </View>
-            <View style={styles.progressBadge}>
-              <Text style={styles.progressBadgeText}>{profilePercent}%</Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${profilePercent}%` }]} />
             </View>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${profilePercent}%` }]} />
+            <View style={styles.progressFooter}>
+              <Text style={styles.progressLink}>{profileCopy.cta}</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </View>
           </View>
         </Pressable>
       ) : null}
 
-      <Pressable style={styles.searchHero} onPress={() => router.push("/search")}>
-        <View style={styles.searchHeroTop}>
-          <View style={styles.searchHeroIcon}>
-            <Ionicons name="search" size={20} color={activeTheme.text} />
+      <View style={styles.categoryRow}>
+        {foodCategories.map((item) => (
+          <Pressable
+            key={item.label}
+            style={styles.categoryPill}
+            onPress={() =>
+              router.push({ pathname: "/search-results", params: { category: item.label } })
+            }
+          >
+            <Ionicons name={item.icon} size={16} color={activeTheme.primaryDark} />
+            <Text style={styles.categoryText}>{item.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Recommendation</Text>
+        </View>
+        <Pressable onPress={() => router.push("/recipes" as never)}>
+          <Text style={styles.seeAllText}>See all</Text>
+        </Pressable>
+      </View>
+      <Animated.ScrollView
+        horizontal
+        style={styles.edgeCarousel}
+        showsHorizontalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never" contentContainerStyle={styles.recommendationRow}>
+        {recipeRecommendations.map((item) => (
+          <Pressable
+            key={item.id}
+            style={styles.recommendationCard}
+            onPress={() =>
+              router.push({ pathname: "/recipe-detail", params: { id: item.id } } as never)
+            }
+          >
+            <Image source={item.image} style={styles.recommendationImage} contentFit="cover" />
+            <View style={styles.recommendationCopy}>
+              <Text numberOfLines={1} style={styles.recommendationTitle}>{item.title}</Text>
+              <Text style={styles.recommendationMeta}>By {item.author}</Text>
+            </View>
+          </Pressable>
+        ))}
+      </Animated.ScrollView>
+
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Dish of the Week</Text>
+          <Text style={styles.sectionSubtitle}>A fast pick when you want a chef match now.</Text>
+        </View>
+      </View>
+      <Pressable
+        style={styles.dishWeekCard}
+        onPress={() =>
+          featuredCook
+            ? router.push({ pathname: "/cooks/[id]", params: { id: featuredCook.id, source: "dish_of_week" } } as never)
+            : router.push("/all-cooks" as never)
+        }
+      >
+        <Pressable
+          style={styles.dishSaveButton}
+          onPress={(event) => {
+            event.stopPropagation();
+            setSavedDishOfWeek((value) => !value);
+          }}
+        >
+          <Ionicons
+            name={savedDishOfWeek ? "heart" : "heart-outline"}
+            size={18}
+            color={savedDishOfWeek ? "#FF6B6B" : "#FFFFFF"}
+          />
+        </Pressable>
+        <View style={styles.dishWeekCopy}>
+          <Text style={styles.dishWeekTitle}>Spicy Ramen Noodle</Text>
+          <Text style={styles.dishWeekMeta}>440 kcal</Text>
+          <Text style={styles.dishWeekLabel}>Ingredients</Text>
+          <View style={styles.dishIngredientRow}>
+            {["fast-food-outline", "egg-outline", "nutrition-outline", "grid-outline"].map((icon) => (
+              <View key={icon} style={styles.dishIngredientIcon}>
+                <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={17} color="#FFFFFF" />
+              </View>
+            ))}
           </View>
-          <View style={styles.searchHeroCopy}>
-            <Text style={styles.searchHeroTitle}>Search cooks, dishes, or your area</Text>
-            <Text style={styles.searchHeroText}>
-              Search around {explorerContext.cityLabel} for dinner tonight, meal prep this week, or someone who can work quietly in your home.
-            </Text>
+          <View style={styles.dishWeekFooter}>
+            <View style={styles.dishOrderButton}>
+              <Text style={styles.dishOrderText}>Order chef</Text>
+            </View>
+            <View style={styles.dishTime}>
+              <Ionicons name="time-outline" size={15} color="rgba(255,255,255,0.62)" />
+              <Text style={styles.dishTimeText}>14 min</Text>
+            </View>
           </View>
         </View>
-        <View style={styles.searchHeroFooter}>
-          <Text style={styles.searchHeroLink}>Start search</Text>
-          <Ionicons name="arrow-forward" size={18} color={activeTheme.text} />
+        <Image source={heroFoodImages.platter} style={styles.dishWeekImage} contentFit="cover" />
+      </Pressable>
+
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Featured cook</Text>
+          <Text style={styles.sectionSubtitle}>A strong match from today&apos;s trusted profiles.</Text>
+        </View>
+      </View>
+
+      <Pressable
+        style={styles.featureCard}
+        onPress={() =>
+          featuredCook
+            ? router.push({ pathname: "/cooks/[id]", params: { id: featuredCook.id } })
+            : router.push("/search")
+        }
+      >
+        <Image source={heroFoodImages.jollof} style={styles.featureImage} contentFit="cover" />
+        <View style={styles.featureShade} />
+        <View style={styles.featureTop}>
+          <View style={styles.ratingPill}>
+            <Ionicons name="star" size={14} color="#FFCA45" />
+            <Text style={styles.ratingText}>4.9</Text>
+          </View>
+          <Pressable style={styles.heartButton}>
+            <Ionicons name="heart-outline" size={19} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <View style={styles.featureBottom}>
+          <Text style={styles.featureEyebrow}>Tonight&apos;s strong match</Text>
+          <Text style={styles.featureTitle}>{previewCook.name}</Text>
+          <Text numberOfLines={2} style={styles.featureBody}>{previewCook.headline}</Text>
+          <View style={styles.featureMetaRow}>
+            <View style={styles.featureMeta}>
+              <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
+              <Text style={styles.featureMetaText}>
+                {previewCook.verified ? "Verified" : "Reviewing"}
+              </Text>
+            </View>
+            <View style={styles.featureMeta}>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
+              <Text style={styles.featureMetaText}>{previewCook.location}</Text>
+            </View>
+          </View>
         </View>
       </Pressable>
 
-      <View style={styles.companionRow}>
-        <Pressable style={styles.decisionCard} onPress={() => router.push("/meal-match")}>
-          <Text style={styles.companionEyebrow}>Decision help</Text>
-          <Text style={styles.decisionTitle}>Not sure what to eat?</Text>
-          <Text style={styles.decisionBody}>
-            Tell us your mood, spice level, and gym focus. We&apos;ll shape the right cook search for you.
-          </Text>
-        </Pressable>
-
-        <Pressable style={styles.preferenceCard} onPress={() => router.push("/companion-preferences")}>
-          <Text style={styles.companionEyebrow}>Companion settings</Text>
-          <Text style={styles.decisionTitle}>Keep recommendations personal</Text>
-          <Text style={styles.decisionBody}>
-            Give permission for smarter city-aware suggestions without stepping outside your comfort line.
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.moodCard}>
-        <Text style={styles.sectionTitle}>What feels right today?</Text>
-        <Text style={styles.sectionBody}>
-          {explorerContext.foodMoment} Pick a starting point and we will shape the cook list around that intent.
-        </Text>
-        <View style={styles.moodGrid}>
-          {moodPrompts.map((prompt) => (
-            <Pressable
-              key={prompt.label}
-              style={styles.moodButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/search-results",
-                  params: { query: prompt.query },
-                })
-              }
-            >
-              <Ionicons name={prompt.icon} size={18} color={activeTheme.primaryDark} />
-              <Text style={styles.moodButtonText}>{prompt.label}</Text>
-            </Pressable>
-          ))}
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>What feels right today?</Text>
+          <Text style={styles.sectionSubtitle}>Choose a mood and we will narrow the cook list.</Text>
         </View>
       </View>
-
-      {featuredCook ? (
-        <Pressable
-          style={styles.featureCard}
-          onPress={() => router.push({ pathname: "/cooks/[id]", params: { id: featuredCook.id } })}
-        >
-          <View style={styles.featureAccent} />
-          <View style={styles.featureHeader}>
-            <View style={styles.featureCopy}>
-              <Text style={styles.featureEyebrow}>Tonight&apos;s strong match</Text>
-              <Text style={styles.featureTitle}>{featuredCook.name}</Text>
-              <Text style={styles.featureSubtitle}>{featuredCook.headline}</Text>
-            </View>
-            <View style={styles.featureAvatarWrap}>
-              {featuredCook.user.photoUrl ? (
-                <Image source={featuredCook.user.photoUrl} style={styles.featureAvatar} contentFit="cover" />
-              ) : (
-                <View style={styles.featureAvatarFallback}>
-                  <Text style={styles.featureAvatarText}>{featuredCook.name.slice(0, 1)}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.featureMetaRow}>
-            <View style={styles.featureMetaPill}>
-              <Ionicons name="location-outline" size={14} color={activeTheme.text} />
-              <Text style={styles.featureMetaText}>{featuredCook.location}</Text>
-            </View>
-            <View style={styles.featureMetaPill}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={activeTheme.text} />
-              <Text style={styles.featureMetaText}>
-                {featuredCook.verified ? "Verified profile" : "In review"}
-              </Text>
-            </View>
-            <View style={styles.featureMetaPill}>
-              <Ionicons name="restaurant-outline" size={14} color={activeTheme.text} />
-              <Text style={styles.featureMetaText}>{featuredCook.specialties[0] || "Home cooking"}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.featureNote}>{featuredCook.note}</Text>
-          <View style={styles.safetyRibbon}>
-            <Ionicons name="shield-checkmark" size={16} color={activeTheme.primaryDark} />
-            <Text style={styles.safetyRibbonText}>{explorerContext.safetyLine}</Text>
-          </View>
-
-          <View style={styles.featureActionRow}>
-            <Pressable
-              style={styles.featureSecondaryButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/cooks/[id]",
-                  params: { id: featuredCook.id },
-                })
-              }
-            >
-              <Text style={styles.featureSecondaryText}>View profile</Text>
-            </Pressable>
-            <Pressable
-              style={styles.featurePrimaryButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/booking-request",
-                  params: { cookId: featuredCook.id },
-                })
-              }
-            >
-              <Text style={styles.featurePrimaryText}>Book this cook</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      ) : null}
-
-      <View style={styles.miniSection}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeaderCopy}>
-            <Text style={styles.sectionTitle}>Quick matches</Text>
-            <Text style={styles.sectionBody}>
-              {isLoadingDirectory
-                ? "Loading trusted cooks..."
-                : `Short, easy choices around ${explorerContext.cityLabel} for when you want to move fast.`}
-            </Text>
-          </View>
+      <View style={styles.moodGrid}>
+        {moodPrompts.map((prompt) => (
           <Pressable
-            style={styles.seeAllButton}
-            onPress={() => router.push({ pathname: "/all-cooks", params: { sort: "popular" } })}
+            key={prompt.label}
+            style={styles.moodCard}
+            onPress={() =>
+              router.push({ pathname: "/search-results", params: { query: prompt.query } })
+            }
           >
-            <Text style={styles.seeAllText}>See all</Text>
+            <View style={styles.moodIcon}>
+              <Ionicons name={prompt.icon} size={18} color={activeTheme.primaryDark} />
+            </View>
+            <Text style={styles.moodText}>{prompt.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Popular cooks</Text>
+          <Text style={styles.sectionSubtitle}>
+            {isLoadingDirectory
+              ? "Loading trusted cooks..."
+              : `Trusted profiles around ${explorerContext.cityLabel}.`}
+          </Text>
+        </View>
+        <Pressable onPress={() => router.push({ pathname: "/all-cooks", params: { sort: "popular" } })}>
+          <Text style={styles.seeAllText}>See all</Text>
+        </Pressable>
+      </View>
+
+      <Animated.ScrollView
+        horizontal
+        style={styles.edgeCarousel}
+        showsHorizontalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never" contentContainerStyle={styles.cookRow}>
+        {(quickMatches.length ? quickMatches : [previewCook]).map((cook, index) => (
+          <Pressable
+            key={cook.id}
+            style={styles.cookCard}
+            onPress={() =>
+              cook.id === "preview"
+                ? router.push("/search")
+                : router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
+            }
+          >
+            <Image source={getCookImage(index)} style={styles.cookImage} contentFit="cover" />
+            <View style={styles.cookTopLine}>
+              <RoundedAvatar
+                name={cook.name}
+                photoUrl={cook.user.photoUrl}
+                size={42}
+                backgroundColor={activeTheme.accent}
+              />
+              <View style={styles.smallRating}>
+                <Ionicons name="star" size={12} color="#FFCA45" />
+                <Text style={styles.smallRatingText}>4.{9 - (index % 3)}</Text>
+              </View>
+            </View>
+            <Text numberOfLines={1} style={styles.cookName}>{cook.name}</Text>
+            <Text numberOfLines={1} style={styles.cookMeta}>{cook.specialties[0] || "Home cooking"}</Text>
+            <View style={styles.cookFooter}>
+              <Text style={styles.cookLocation}>{cook.serviceAreaLabel || cook.location}</Text>
+              <Pressable
+                style={styles.bookButton}
+                onPress={() =>
+                  cook.id === "preview"
+                    ? router.push("/search")
+                    : router.push({ pathname: "/booking-request", params: { cookId: cook.id } })
+                }
+              >
+                <Ionicons name="add" size={18} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </Pressable>
+        ))}
+      </Animated.ScrollView>
+
+      <View style={styles.companionCard}>
+        <View style={styles.assistantHeroImageWrap}>
+          <Image source={heroFoodImages.salad} style={styles.assistantHeroImage} contentFit="cover" />
+        </View>
+        <View style={styles.companionCopy}>
+          <Text style={styles.companionTitle}>Your Personal Food AI Assistant</Text>
+          <Text style={styles.companionBody}>
+            I can suggest recipes, track calories, plan meals, and provide personalized nutrition advice daily.
+          </Text>
+          <Pressable style={styles.companionButton} onPress={() => router.push("/cooking-assistant" as never)}>
+            <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+            <Text style={styles.companionButtonText}>Your Assistant</Text>
           </Pressable>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-          {quickMatches.map((cook) => (
-            <Pressable
-              key={cook.id}
-              style={styles.miniCookCard}
-              onPress={() => router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })}
-            >
-              <View style={styles.miniCookTop}>
-                <View style={styles.miniAvatar}>
-                  {cook.user.photoUrl ? (
-                    <Image source={cook.user.photoUrl} style={styles.miniAvatarImage} contentFit="cover" />
-                  ) : (
-                    <Text style={styles.miniAvatarText}>{cook.name.slice(0, 1)}</Text>
-                  )}
-                </View>
-                {cook.verified ? <View style={styles.miniVerifiedDot} /> : null}
-              </View>
-              <Text numberOfLines={1} style={styles.miniCookName}>{cook.name}</Text>
-              <Text numberOfLines={1} style={styles.miniCookMeta}>{cook.location}</Text>
-              <Text numberOfLines={1} style={styles.miniCookTag}>
-                {cook.specialties[0] || cook.tags[0] || "Home cooking"}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
       </View>
 
-      <View style={styles.dualSectionRow}>
-        <Pressable
-          style={styles.storyCard}
-          onPress={() => router.push({ pathname: "/all-cooks", params: { sort: "verified" } })}
-        >
-          <Text style={styles.storyEyebrow}>Trust first</Text>
-          <Text style={styles.storyTitle}>Verified cooks</Text>
-          <Text style={styles.storyBody}>
-            Start from stronger trust signals when booking into your home around {explorerContext.cityLabel}.
-          </Text>
-          <Text style={styles.storyMetric}>{verifiedCooks.length}</Text>
-        </Pressable>
+      <Pressable style={styles.kitchenCard} onPress={() => router.push("/my-kitchen" as never)}>
+        <View style={styles.kitchenHeader}>
+          <View>
+            <Text style={styles.kitchenEyebrow}>My Kitchen</Text>
+            <Text style={styles.kitchenTitle}>Smart kitchen control</Text>
+          </View>
+          <View style={styles.kitchenIconButton}>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+          </View>
+        </View>
+        <View style={styles.kitchenDevice}>
+          <View>
+            <Text style={styles.kitchenDeviceName}>Viking Oven</Text>
+            <Text style={styles.kitchenStatus}>Pre heating</Text>
+          </View>
+          <Ionicons name="ellipsis-horizontal" size={18} color={activeTheme.textMuted} />
+        </View>
+        <View style={styles.kitchenMetricRow}>
+          <View style={styles.kitchenMetric}>
+            <Text style={styles.kitchenMetricLabel}>Remaining time</Text>
+            <Text style={styles.kitchenMetricValue}>08:12</Text>
+          </View>
+          <View style={styles.kitchenMetric}>
+            <Text style={styles.kitchenMetricLabel}>Temp.</Text>
+            <Text style={styles.kitchenMetricValue}>180°C</Text>
+          </View>
+        </View>
+      </Pressable>
 
-        <Pressable
-          style={styles.storyCard}
-          onPress={() => router.push({ pathname: "/all-cooks", params: { sort: "complete" } })}
-        >
-          <Text style={styles.storyEyebrow}>Prepared profiles</Text>
-          <Text style={styles.storyTitle}>100% complete</Text>
-          <Text style={styles.storyBody}>
-            These cooks have gone further in showing how they work in homes around {explorerContext.cityLabel}.
-          </Text>
-          <Text style={styles.storyMetric}>{completeProfileCooks.length}</Text>
-        </Pressable>
-      </View>
 
-      <View style={styles.miniSection}>
+      {/* <View style={styles.tastePanel}>
         <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeaderCopy}>
+          <View>
             <Text style={styles.sectionTitle}>Browse by taste</Text>
-            <Text style={styles.sectionBody}>
-              When the dish comes first, start from the craving and narrow from there.
-            </Text>
+            <Text style={styles.sectionSubtitle}>Start from a craving.</Text>
           </View>
         </View>
         <View style={styles.tasteRow}>
@@ -315,10 +468,7 @@ export default function ExploreScreen() {
               key={chip}
               style={styles.tasteChip}
               onPress={() =>
-                router.push({
-                  pathname: "/search-results",
-                  params: { query: chip },
-                })
+                router.push({ pathname: "/search-results", params: { query: chip } })
               }
             >
               <Text style={styles.tasteChipText}>{chip}</Text>
@@ -327,649 +477,719 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      <View style={styles.miniSection}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeaderCopy}>
-            <Text style={styles.sectionTitle}>Quiet confidence</Text>
-            <Text style={styles.sectionBody}>
-              Profiles that feel more polished for explorers who want fewer unknowns in {explorerContext.nearbyLabel}.
-            </Text>
-          </View>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-          {trustedLane.slice(0, 3).map((cook) => (
-            <Pressable
-              key={cook.id}
-              style={styles.editorialCard}
-              onPress={() => router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })}
-            >
-              <Text style={styles.editorialName}>{cook.name}</Text>
-              <Text numberOfLines={2} style={styles.editorialBody}>{cook.headline}</Text>
-              <View style={styles.editorialFooter}>
-                <Text style={styles.editorialMeta}>{cook.serviceAreaLabel}</Text>
-                <Ionicons name="arrow-forward" size={16} color={activeTheme.text} />
-              </View>
-            </Pressable>
-          ))}
-          {polishedLane.slice(0, 2).map((cook) => (
-            <Pressable
-              key={`${cook.id}-polished`}
-              style={styles.editorialCardSoft}
-              onPress={() => router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })}
-            >
-              <Text style={styles.editorialName}>{cook.name}</Text>
-              <Text numberOfLines={2} style={styles.editorialBody}>{cook.note}</Text>
-              <View style={styles.editorialFooter}>
-                <Text style={styles.editorialMeta}>{cook.profilePercent}% complete</Text>
-                <Ionicons name="arrow-forward" size={16} color={activeTheme.text} />
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.companionCard}>
-        <Text style={styles.companionEyebrow}>Companion mode</Text>
-        <Text style={styles.companionTitle}>We can keep this personal without crossing the line.</Text>
-        <Text style={styles.companionBody}>
-          We use the city, timing, saved cooks, and booking activity you already share with us to keep recommendations useful and safety-first.
-        </Text>
-        <View style={styles.companionList}>
-          <Text style={styles.companionPoint}>City-aware suggestions for {explorerContext.cityLabel}</Text>
-          <Text style={styles.companionPoint}>Safer reminders tied to saved cooks and active bookings</Text>
-          <Text style={styles.companionPoint}>Trust-first language before every home booking step</Text>
-        </View>
-        <Pressable style={styles.companionAction} onPress={() => router.push("/companion-preferences")}>
-          <Text style={styles.companionActionText}>Review companion permissions</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+      <View style={styles.trustRow}>
+        <MetricCard label="Verified cooks" value={verifiedCooks.length} />
+        <MetricCard label="Complete profiles" value={completeProfileCooks.length} />
+      </View> */}
+      </Animated.ScrollView>
+    </View>
   );
 }
 
-const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
+const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boolean) =>
   StyleSheet.create({
     screen: {
       flex: 1,
       backgroundColor: activeTheme.bg,
     },
+    scrollArea: {
+      flex: 1,
+    },
+    backgroundBand: {
+      position: "absolute",
+      top: 280,
+      left: -40,
+      right: -40,
+      height: 220,
+      borderRadius: 48,
+      backgroundColor: activeTheme.warmSurface,
+      transform: [{ rotate: "-3deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.8 : 0.1,
+    },
+    backgroundTile: {
+      position: "absolute",
+      top: 520,
+      right: -76,
+      width: 210,
+      height: 124,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.safeSurface,
+      transform: [{ rotate: "12deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.68 : 0.1,
+    },
+    floatingLogo: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: theme.layout.screenTop + 88,
+      zIndex: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: 6,
+    },
+    floatingLogoImage: {
+      width: 132,
+      height: 132,
+    },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.lg : 0,
       paddingBottom: 120,
       gap: theme.spacing.lg,
     },
-    topGlow: {
-      position: "absolute",
-      top: -120,
-      right: -70,
-      width: 270,
-      height: 270,
-      borderRadius: 135,
-      backgroundColor: activeTheme.accentSoft,
-      opacity: activeTheme.bg === "#121713" ? 0.24 : 0.95,
+    contentWide: {
+      width: "100%",
+      maxWidth: 1180,
+      alignSelf: "center",
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.xxl,
+      gap: theme.spacing.xl,
     },
-    sideGlow: {
-      position: "absolute",
-      top: 210,
-      left: -90,
-      width: 190,
-      height: 190,
-      borderRadius: 95,
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surfaceElevated : "#F6E9D8",
-      opacity: activeTheme.bg === "#121713" ? 0.55 : 0.75,
+    heroPanel: {
+      minHeight: isWideWeb ? 420 : 252,
+      borderRadius: isWideWeb ? 38 : 34,
+      overflow: "hidden",
+      padding: isWideWeb ? theme.spacing.xl : theme.spacing.lg,
+      justifyContent: "space-between",
+      backgroundColor: "#14160F",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 26,
+      shadowOffset: { width: 0, height: 16 },
+      elevation: 8,
     },
-    headerBlock: { gap: 8 },
-    eyebrow: {
-      color: activeTheme.primaryDark,
-      fontSize: 13,
-      fontWeight: "800",
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
+    heroPanelMobileFullBleed: {
+      marginHorizontal: -theme.spacing.lg,
+      marginTop: 0,
+      marginBottom: 4,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+      borderBottomLeftRadius: 34,
+      borderBottomRightRadius: 34,
+      minHeight: 330,
+      paddingTop: theme.layout.screenTop,
     },
-    title: {
-      color: activeTheme.text,
-      fontSize: 34,
-      lineHeight: 40,
-      fontWeight: "800",
-      maxWidth: 340,
+    heroImageLayer: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "#14160F",
+      overflow: "hidden",
     },
-    subtitle: {
-      color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 23,
-      maxWidth: 350,
+    heroImage: {
+      ...StyleSheet.absoluteFillObject,
+      width: "100%",
+      height: "100%",
+      transform: [{ scale: 1.04 }],
     },
-    completeProfileCard: {
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surface : "#F6E8D7",
-      borderWidth: 1,
-      borderColor: activeTheme.bg === "#121713" ? activeTheme.border : "#E0C8B0",
-      borderRadius: 28,
-      padding: theme.spacing.lg,
+    heroShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.18)",
+    },
+    heroTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
       gap: 14,
     },
-    completeProfileTop: {
-      flexDirection: "row",
-      gap: 12,
-      justifyContent: "space-between",
-    },
-    completeProfileCopy: { flex: 1, gap: 4 },
-    completeProfileTitle: {
-      color: activeTheme.text,
-      fontSize: 22,
-      lineHeight: 27,
-      fontWeight: "800",
-    },
-    completeProfileSubtitle: {
-      color: activeTheme.textMuted,
+    heroHello: {
+      color: "#FFF7E8",
       fontSize: 14,
-      lineHeight: 21,
+      fontWeight: "700",
+      marginBottom: 6,
     },
-    progressBadge: {
-      minWidth: 62,
-      height: 38,
-      borderRadius: theme.radius.pill,
+    heroTitle: {
+      color: "#FFFFFF",
+      fontSize: isWideWeb ? 52 : 31,
+      lineHeight: isWideWeb ? 58 : 37,
+      fontWeight: "900",
+      maxWidth: isWideWeb ? 580 : 280,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.primary,
+      backgroundColor: "rgba(255,255,255,0.92)",
+    },
+    searchBar: {
+      minHeight: 54,
+      borderRadius: theme.radius.pill,
+      backgroundColor: activeTheme.surface,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      maxWidth: isWideWeb ? 560 : undefined,
+    },
+    searchText: {
+      flex: 1,
+      color: activeTheme.textMuted,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    quickActionRow: {
+      flexDirection: "row",
+      gap: 10,
+      maxWidth: isWideWeb ? 680 : undefined,
+    },
+    quickAction: {
+      flex: 1,
+      minHeight: 76,
+      borderRadius: 22,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    quickActionText: {
+      color: activeTheme.text,
+      fontSize: 11,
+      fontWeight: "800",
+      textAlign: "center",
+    },
+    progressCard: {
+      minHeight: 210,
+      borderRadius: 30,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    progressImage: { ...StyleSheet.absoluteFillObject },
+    progressImageShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.48)",
+    },
+    progressContent: {
+      flex: 1,
+      padding: theme.spacing.lg,
+      justifyContent: "space-between",
+      gap: 16,
+    },
+    progressTop: { flexDirection: "row", gap: 12, justifyContent: "space-between" },
+    progressCopy: { flex: 1, gap: 5 },
+    progressEyebrow: {
+      color: "#FFE0BD",
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    progressTitle: { color: "#FFFFFF", fontSize: 22, lineHeight: 28, fontWeight: "900" },
+    progressBody: { color: "rgba(255,255,255,0.84)", fontSize: 13, lineHeight: 20 },
+    progressBadge: {
+      minWidth: 58,
+      height: 38,
+      borderRadius: theme.radius.pill,
+      backgroundColor: "rgba(255,255,255,0.18)",
+      alignItems: "center",
+      justifyContent: "center",
       paddingHorizontal: 12,
     },
-    progressBadgeText: {
-      color: "#FFFFFF",
-      fontSize: 14,
-      fontWeight: "800",
-    },
+    progressBadgeText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
     progressTrack: {
-      height: 10,
+      height: 9,
       borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.surfaceElevated,
+      backgroundColor: "rgba(255,255,255,0.25)",
       overflow: "hidden",
     },
     progressFill: {
       height: "100%",
       borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.primary,
+      backgroundColor: "#FFFFFF",
     },
-    searchHero: {
-      borderRadius: 30,
-      padding: theme.spacing.lg,
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      gap: theme.spacing.lg,
-      shadowColor: activeTheme.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      shadowOffset: { width: 0, height: 14 },
-      elevation: 6,
-    },
-    searchHeroTop: {
+    progressFooter: {
       flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 14,
-    },
-    searchHeroIcon: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
       alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: activeTheme.accentSoft,
+      gap: 8,
     },
-    searchHeroCopy: { flex: 1, gap: 5 },
-    searchHeroTitle: {
-      color: activeTheme.text,
-      fontSize: 21,
-      lineHeight: 27,
-      fontWeight: "800",
-    },
-    searchHeroText: {
-      color: activeTheme.textMuted,
+    progressLink: {
+      color: "#FFFFFF",
       fontSize: 14,
-      lineHeight: 22,
+      fontWeight: "900",
     },
-    searchHeroFooter: {
+    sectionHeader: {
       flexDirection: "row",
-      alignItems: "center",
       justifyContent: "space-between",
-    },
-    searchHeroLink: {
-      color: activeTheme.text,
-      fontSize: 15,
-      fontWeight: "800",
-    },
-    companionRow: {
-      gap: 12,
-    },
-    decisionCard: {
-      borderRadius: 28,
-      backgroundColor: activeTheme.warmSurface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      gap: 8,
-    },
-    preferenceCard: {
-      borderRadius: 28,
-      backgroundColor: activeTheme.focusSurface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      gap: 8,
-    },
-    decisionTitle: {
-      color: activeTheme.text,
-      fontSize: 21,
-      lineHeight: 27,
-      fontWeight: "800",
-    },
-    decisionBody: {
-      color: activeTheme.textMuted,
-      fontSize: 14,
-      lineHeight: 21,
-    },
-    moodCard: {
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      borderRadius: 28,
-      padding: theme.spacing.lg,
+      alignItems: "flex-end",
       gap: 12,
     },
     sectionTitle: {
       color: activeTheme.text,
-      fontSize: 24,
-      lineHeight: 30,
-      fontWeight: "800",
+      fontSize: 22,
+      lineHeight: 27,
+      fontWeight: "900",
     },
-    sectionBody: {
+    sectionSubtitle: {
       color: activeTheme.textMuted,
-      fontSize: 14,
-      lineHeight: 21,
+      fontSize: 13,
+      lineHeight: 20,
+      marginTop: 3,
+    },
+    seeAllText: { color: activeTheme.primaryDark, fontSize: 13, fontWeight: "900" },
+    inspirationRow: { gap: 12, paddingRight: 6 },
+    inspirationCard: {
+      width: isWideWeb ? 210 : 132,
+      height: isWideWeb ? 132 : 92,
+      borderRadius: 22,
+      overflow: "hidden",
+      padding: 12,
+      justifyContent: "flex-end",
+      backgroundColor: activeTheme.surfaceElevated,
+    },
+    inspirationImage: { ...StyleSheet.absoluteFillObject },
+    cardShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.34)" },
+    inspirationTitle: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+    inspirationSubtitle: { color: "rgba(255,255,255,0.82)", fontSize: 11, fontWeight: "700" },
+    categoryRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      maxWidth: isWideWeb ? 760 : undefined,
+    },
+    categoryPill: {
+      minHeight: 40,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    categoryText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
+    featureCard: {
+      height: isWideWeb ? 460 : 360,
+      borderRadius: 34,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
+      padding: theme.spacing.lg,
+      justifyContent: "space-between",
+    },
+    featureImage: { ...StyleSheet.absoluteFillObject },
+    featureShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+    featureTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    ratingPill: {
+      minHeight: 34,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: "rgba(0,0,0,0.42)",
+    },
+    ratingText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+    heartButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: "rgba(0,0,0,0.32)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    featureBottom: { gap: 8 },
+    featureEyebrow: {
+      color: "#FFE0BD",
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    featureTitle: {
+      color: "#FFFFFF",
+      fontSize: 30,
+      lineHeight: 35,
+      fontWeight: "900",
+    },
+    featureBody: { color: "rgba(255,255,255,0.86)", fontSize: 14, lineHeight: 21 },
+    featureMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    featureMeta: {
+      minHeight: 34,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 11,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(255,255,255,0.16)",
+    },
+    featureMetaText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+    recommendationRow: {
+      gap: 12,
+      paddingHorizontal: 0,
+    },
+    edgeCarousel: {
+      marginHorizontal: isWideWeb ? 0 : -theme.spacing.lg,
+    },
+    recommendationCard: {
+      width: isWideWeb ? 210 : 138,
+      borderRadius: 18,
+      backgroundColor: activeTheme.surface,
+      padding: 8,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    recommendationImage: {
+      width: "100%",
+      height: isWideWeb ? 150 : 106,
+      borderRadius: 14,
+    },
+    recommendationShade: { display: "none" },
+    recommendationRating: { display: "none" },
+    recommendationRatingText: { display: "none" },
+    recommendationCopy: { gap: 2 },
+    recommendationTitle: { color: activeTheme.text, fontSize: 13, fontWeight: "900" },
+    recommendationMeta: { color: activeTheme.textMuted, fontSize: 11, fontWeight: "700" },
+    weekRecipeCard: {
+      height: isWideWeb ? 260 : 170,
+      borderRadius: 24,
+      overflow: "hidden",
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    weekRecipeImage: {
+      width: "100%",
+      height: "100%",
+    },
+    weekAddButton: {
+      position: "absolute",
+      bottom: -2,
+      alignSelf: "center",
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: activeTheme.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 6,
+      borderColor: activeTheme.bg,
     },
     moodGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 10,
     },
-    moodButton: {
-      minWidth: "47%",
-      flexGrow: 1,
-      borderRadius: 22,
-      backgroundColor: activeTheme.surfaceElevated,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-    moodButtonText: {
-      color: activeTheme.text,
-      fontSize: 14,
-      fontWeight: "700",
-    },
-    featureCard: {
-      overflow: "hidden",
-      borderRadius: 34,
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.xl,
-      gap: theme.spacing.lg,
-      shadowColor: activeTheme.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 26,
-      shadowOffset: { width: 0, height: 16 },
-      elevation: 7,
-    },
-    featureAccent: {
-      position: "absolute",
-      top: -40,
-      right: -40,
-      width: 180,
-      height: 180,
-      borderRadius: 90,
-      backgroundColor: activeTheme.accentSoft,
-      opacity: activeTheme.bg === "#121713" ? 0.45 : 0.95,
-    },
-    featureHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 14,
-    },
-    featureCopy: { flex: 1, gap: 6 },
-    featureEyebrow: {
-      color: activeTheme.primaryDark,
-      fontSize: 13,
-      fontWeight: "800",
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-    },
-    featureTitle: {
-      color: activeTheme.text,
-      fontSize: 30,
-      lineHeight: 34,
-      fontWeight: "800",
-    },
-    featureSubtitle: {
-      color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 22,
-      maxWidth: 250,
-    },
-    featureAvatarWrap: {
-      width: 76,
-      height: 76,
-      borderRadius: 24,
-      overflow: "hidden",
-      backgroundColor: activeTheme.accent,
-    },
-    featureAvatar: {
-      width: "100%",
-      height: "100%",
-    },
-    featureAvatarFallback: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    featureAvatarText: {
-      color: "#FFFFFF",
-      fontSize: 28,
-      fontWeight: "800",
-    },
-    featureMetaRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-    },
-    featureMetaPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 7,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.bg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-    },
-    featureMetaText: {
-      color: activeTheme.text,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    featureNote: {
-      color: activeTheme.text,
-      fontSize: 15,
-      lineHeight: 23,
-    },
-    safetyRibbon: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 8,
-      borderRadius: 18,
-      backgroundColor: activeTheme.bg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
-    },
-    safetyRibbonText: {
-      flex: 1,
-      color: activeTheme.text,
-      fontSize: 13,
-      lineHeight: 20,
-      fontWeight: "700",
-    },
-    featureActionRow: {
-      flexDirection: "row",
-      gap: 10,
-    },
-    featureSecondaryButton: {
-      flex: 1,
-      minHeight: 50,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      backgroundColor: activeTheme.bg,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    featureSecondaryText: {
-      color: activeTheme.text,
-      fontSize: 15,
-      fontWeight: "700",
-    },
-    featurePrimaryButton: {
-      flex: 1,
-      minHeight: 50,
-      borderRadius: 18,
-      backgroundColor: activeTheme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    featurePrimaryText: {
-      color: "#FFFFFF",
-      fontSize: 15,
-      fontWeight: "800",
-    },
-    miniSection: { gap: 12 },
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "flex-end",
-      justifyContent: "space-between",
-      gap: 12,
-    },
-    sectionHeaderCopy: { flex: 1, gap: 4 },
-    seeAllButton: {
-      minHeight: 34,
-      paddingHorizontal: 12,
-      borderRadius: theme.radius.pill,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: activeTheme.surfaceElevated,
-    },
-    seeAllText: {
-      color: activeTheme.text,
-      fontSize: 13,
-      fontWeight: "800",
-    },
-    horizontalRow: {
-      gap: 12,
-      paddingRight: 10,
-    },
-    miniCookCard: {
-      width: 164,
+    moodCard: {
+      width: "48%",
+      minHeight: 92,
       borderRadius: 24,
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.md,
-      gap: 8,
-    },
-    miniCookTop: {
-      flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-start",
     },
-    miniAvatar: {
-      width: 54,
-      height: 54,
-      borderRadius: 20,
-      overflow: "hidden",
+    moodIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: activeTheme.safeSurface,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.accent,
     },
-    miniAvatarImage: { width: "100%", height: "100%" },
-    miniAvatarText: { color: "#FFFFFF", fontSize: 22, fontWeight: "800" },
-    miniVerifiedDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: activeTheme.primary,
-      marginTop: 6,
-    },
-    miniCookName: {
-      color: activeTheme.text,
-      fontSize: 15,
-      fontWeight: "800",
-    },
-    miniCookMeta: {
-      color: activeTheme.textMuted,
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    miniCookTag: {
-      color: activeTheme.primaryDark,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    dualSectionRow: {
+    moodText: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
+    dishWeekCard: {
+      minHeight: 210,
+      borderRadius: 30,
+      overflow: "hidden",
+      backgroundColor: "#20201D",
+      padding: theme.spacing.lg,
       flexDirection: "row",
+      alignItems: "center",
       gap: 12,
     },
-    storyCard: {
-      flex: 1,
-      borderRadius: 28,
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      gap: 8,
-      minHeight: 182,
-      justifyContent: "space-between",
-    },
-    storyEyebrow: {
-      color: activeTheme.primaryDark,
-      fontSize: 12,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.3,
-    },
-    storyTitle: {
-      color: activeTheme.text,
-      fontSize: 22,
-      lineHeight: 26,
-      fontWeight: "800",
-    },
-    storyBody: {
-      color: activeTheme.textMuted,
-      fontSize: 13,
-      lineHeight: 20,
-    },
-    storyMetric: {
-      color: activeTheme.text,
-      fontSize: 26,
-      fontWeight: "800",
-    },
-    tasteRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-    },
-    tasteChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.surfaceElevated,
-    },
-    tasteChipText: {
-      color: activeTheme.text,
-      fontSize: 14,
-      fontWeight: "700",
-    },
-    editorialCard: {
-      width: 210,
-      minHeight: 168,
-      borderRadius: 28,
-      backgroundColor: activeTheme.surface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      justifyContent: "space-between",
-      gap: 10,
-    },
-    editorialCardSoft: {
-      width: 210,
-      minHeight: 168,
-      borderRadius: 28,
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surfaceElevated : "#F8EEE2",
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      justifyContent: "space-between",
-      gap: 10,
-    },
-    editorialName: {
-      color: activeTheme.text,
-      fontSize: 19,
-      fontWeight: "800",
-    },
-    editorialBody: {
-      color: activeTheme.textMuted,
-      fontSize: 14,
-      lineHeight: 21,
-    },
-    editorialFooter: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-    },
-    editorialMeta: {
-      color: activeTheme.primaryDark,
-      fontSize: 12,
-      fontWeight: "700",
-      flex: 1,
-    },
-    companionCard: {
-      borderRadius: 30,
-      backgroundColor: activeTheme.bg === "#121713" ? activeTheme.surface : "#F6E8D7",
-      borderWidth: 1,
-      borderColor: activeTheme.bg === "#121713" ? activeTheme.border : "#E0C8B0",
-      padding: theme.spacing.lg,
-      gap: 10,
-    },
-    companionEyebrow: {
-      color: activeTheme.primaryDark,
-      fontSize: 12,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.3,
-    },
-    companionTitle: {
-      color: activeTheme.text,
-      fontSize: 22,
-      lineHeight: 28,
-      fontWeight: "800",
-    },
-    companionBody: {
-      color: activeTheme.textMuted,
-      fontSize: 14,
-      lineHeight: 21,
-    },
-    companionList: { gap: 6 },
-    companionPoint: {
-      color: activeTheme.text,
-      fontSize: 14,
-      lineHeight: 21,
-      fontWeight: "700",
-    },
-    companionAction: {
-      alignSelf: "flex-start",
-      minHeight: 40,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.primary,
-      paddingHorizontal: 16,
+    dishSaveButton: {
+      position: "absolute",
+      top: 14,
+      right: 14,
+      zIndex: 4,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.34)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    dishWeekCopy: {
+      flex: 1,
+      gap: 8,
+      zIndex: 1,
+    },
+    dishWeekTitle: {
+      color: "#FFFFFF",
+      fontSize: 25,
+      lineHeight: 30,
+      fontWeight: "900",
+    },
+    dishWeekMeta: {
+      color: "rgba(255,255,255,0.62)",
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    dishWeekLabel: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      fontWeight: "800",
       marginTop: 4,
     },
-    companionActionText: {
-      color: "#FFFFFF",
+    dishIngredientRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    dishIngredientIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.12)",
+    },
+    dishWeekFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 6,
+    },
+    dishOrderButton: {
+      minHeight: 44,
+      borderRadius: theme.radius.pill,
+      backgroundColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 18,
+    },
+    dishOrderText: {
+      color: "#20201D",
       fontSize: 13,
+      fontWeight: "900",
+    },
+    dishTime: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    dishTimeText: {
+      color: "rgba(255,255,255,0.62)",
+      fontSize: 12,
       fontWeight: "800",
     },
+    dishWeekImage: {
+      width: isWideWeb ? 230 : 138,
+      height: isWideWeb ? 190 : 138,
+      borderRadius: 69,
+    },
+    cookRow: { gap: 14, paddingHorizontal: 0 },
+    cookCard: {
+      width: isWideWeb ? 260 : 214,
+      borderRadius: 30,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: 12,
+      gap: 10,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    cookImage: { height: isWideWeb ? 168 : 132, borderRadius: 24 },
+    cookTopLine: {
+      position: "absolute",
+      top: 22,
+      left: 22,
+      right: 22,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    smallRating: {
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      backgroundColor: "rgba(0,0,0,0.46)",
+      flexDirection: "row",
+      gap: 4,
+      alignItems: "center",
+    },
+    smallRatingText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+    cookName: { color: activeTheme.text, fontSize: 18, fontWeight: "900" },
+    cookMeta: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "700" },
+    cookFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    cookLocation: {
+      flex: 1,
+      color: activeTheme.primaryDark,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    bookButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: activeTheme.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    companionCard: {
+      minHeight: isWideWeb ? 360 : 440,
+      borderRadius: 34,
+      overflow: "hidden",
+      backgroundColor: activeTheme.safeSurface,
+      padding: theme.spacing.lg,
+      justifyContent: "space-between",
+    },
+    companionImage: { display: "none" },
+    assistantHeroImageWrap: {
+      alignSelf: "center",
+      width: isWideWeb ? 250 : 220,
+      height: isWideWeb ? 250 : 220,
+      borderRadius: 125,
+      overflow: "hidden",
+      backgroundColor: activeTheme.surface,
+      borderWidth: 10,
+      borderColor: "rgba(255,255,255,0.52)",
+    },
+    assistantHeroImage: {
+      width: "100%",
+      height: "100%",
+    },
+    companionCopy: {
+      gap: 10,
+    },
+    companionEyebrow: { display: "none" },
+    companionTitle: { color: activeTheme.text, fontSize: 27, lineHeight: 34, fontWeight: "900" },
+    companionBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
+    companionButton: {
+      minHeight: 52,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 18,
+      backgroundColor: activeTheme.primaryDark,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 4,
+    },
+    companionButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+    kitchenCard: {
+      borderRadius: 30,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: 14,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    kitchenHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+    },
+    kitchenEyebrow: {
+      color: activeTheme.primaryDark,
+      fontSize: 13,
+      fontWeight: "900",
+    },
+    kitchenTitle: {
+      color: activeTheme.text,
+      fontSize: 23,
+      lineHeight: 28,
+      fontWeight: "900",
+      marginTop: 4,
+    },
+    kitchenIconButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: activeTheme.primaryDark,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    kitchenDevice: {
+      minHeight: 82,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surfaceElevated,
+      padding: theme.spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    kitchenDeviceName: { color: activeTheme.text, fontSize: 16, fontWeight: "900" },
+    kitchenStatus: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "900",
+      backgroundColor: activeTheme.accent,
+      alignSelf: "flex-start",
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: theme.radius.pill,
+      marginTop: 6,
+    },
+    kitchenMetricRow: { flexDirection: "row", gap: 10 },
+    kitchenMetric: {
+      flex: 1,
+      minHeight: 92,
+      borderRadius: 22,
+      backgroundColor: activeTheme.surfaceElevated,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+    },
+    kitchenMetricLabel: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 16, fontWeight: "700" },
+    kitchenMetricValue: { color: activeTheme.text, fontSize: 24, fontWeight: "800" },
+    tastePanel: {
+      borderRadius: 28,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: 14,
+    },
+    tasteRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    tasteChip: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: activeTheme.surfaceElevated,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    tasteChipText: { color: activeTheme.text, fontSize: 13, fontWeight: "800" },
+    trustRow: { flexDirection: "row", gap: 12 },
+    metricCard: {
+      flex: 1,
+      borderRadius: 24,
+      backgroundColor: activeTheme.warmSurface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: 4,
+    },
+    metricValue: { color: activeTheme.text, fontSize: 30, fontWeight: "900" },
+    metricLabel: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 18, fontWeight: "700" },
   });

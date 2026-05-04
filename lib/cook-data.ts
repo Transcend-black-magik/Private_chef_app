@@ -42,6 +42,10 @@ export const cuisineChips = [
   "Family trays",
   "Meal prep",
   "Private dining",
+  "Nutritionist",
+  "High protein",
+  "Paid recipes",
+  "Recipe packs",
 ];
 
 function normalizeText(value?: string | null) {
@@ -122,9 +126,16 @@ export function mapUserToCookDirectoryRecord(user: StoredUser): CookDirectoryRec
   );
   const tags = unique([
     ...specialties,
+    normalizeText(user.dietaryPreferences),
+    normalizeText(user.gymGoal),
+    normalizeText(user.portionPreference),
     normalizeText(user.serviceAreaLabel),
     normalizeText(user.countryName),
-  ]).slice(0, 5);
+    normalizeText(user.role === "cook" ? "Home cooking" : ""),
+    normalizeText(user.specialtiesText) ? "Paid recipes" : "",
+    normalizeText(user.dietaryPreferences) || normalizeText(user.gymGoal) ? "Nutritionist" : "",
+    ...(user.availableMealCategories || []),
+  ]).slice(0, 10);
   const trustBadges = buildTrustBadges(user);
 
   return {
@@ -222,6 +233,13 @@ export function filterCooks({
       cook.serviceAreaLabel,
       cook.note,
       cook.bio,
+      cook.priceHint,
+      cook.user.dietaryPreferences,
+      cook.user.gymGoal,
+      cook.user.portionPreference,
+      cook.user.safetyPractices,
+      cook.user.specialtiesText,
+      (cook.user.availableMealCategories || []).join(" "),
       cook.tags.join(" "),
       cook.specialties.join(" "),
       cook.trustBadges.join(" "),

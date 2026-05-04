@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useColorScheme,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import { getCurrentUserRecord, saveUserRecord, type StoredUser } from "@/lib/app-state";
 import { formatCurrency } from "@/lib/currency";
+import { heroFoodImages } from "@/lib/food-visuals";
 import { getDocumentPlaceholder, shouldRequireExplorerVerificationForOrder } from "@/lib/identity-review";
 import {
   confirmBookingPaymentDummy,
@@ -21,11 +16,36 @@ import {
 } from "@/lib/marketplace";
 import { getTheme, theme } from "@/theme/theme";
 
+function buildCheckoutPlans(booking: BookingRecord | null) {
+  const total = booking ? formatCurrency(booking.totalAmount, booking.explorerCountryCode) : "$0.00";
+  const subtotal = booking ? formatCurrency(booking.subtotalAmount, booking.explorerCountryCode) : "$0.00";
+
+  return [
+    {
+      id: "full",
+      title: `${total} / service`,
+      badge: "Test Paystack",
+      lines: ["Instant chef match", "Funds held safely", "Auto-confirmed after payment"],
+    },
+    {
+      id: "subtotal",
+      title: `${subtotal} cook subtotal`,
+      lines: ["Cook payout protected", "Service details included", "Booking appears for both sides"],
+    },
+    {
+      id: "selected",
+      title: booking?.dishSummary || "Selected dish",
+      lines: [booking?.cookName || "Matched chef", booking?.serviceDateLabel || "Fast service window", "Cancel rules still apply"],
+      selected: true,
+    },
+  ];
+}
+
 export default function CheckoutScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
   const styles = createStyles(activeTheme);
-  const params = useLocalSearchParams<{ bookingId?: string; threadId?: string }>();
+  const params = useLocalSearchParams<{ bookingId?: string; threadId?: string; instant?: string }>();
   const [booking, setBooking] = useState<BookingRecord | null>(null);
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
   const [documentType, setDocumentType] = useState("");
@@ -79,166 +99,211 @@ export default function CheckoutScreen() {
       }
 
       const result = await confirmBookingPaymentDummy(params.bookingId);
+      if (params.instant === "1") {
+        router.replace("/explore" as never);
+        return;
+      }
+
       router.replace({
         pathname: "/chat-thread/[id]",
         params: { id: params.threadId || result.threadId },
       });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not complete this dummy payment.");
+      setError(nextError instanceof Error ? nextError.message : "We could not complete this test payment.");
     } finally {
       setIsLoading(false);
     }
   }
 
+  const plans = buildCheckoutPlans(booking);
+
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.eyebrow}>Checkout</Text>
-      <Text style={styles.title}>Confirm the booking inside the app.</Text>
-      <Text style={styles.subtitle}>
-        This is a dummy payment flow for now, but it is structured to swap into Paystack or Flutterwave next.
-      </Text>
-
-      {currentUser && shouldRequireExplorerVerificationForOrder(currentUser) ? (
-        <View style={styles.verificationCard}>
-          <Text style={styles.sectionTitle}>First-order identity check</Text>
-          <Text style={styles.bodyText}>
-            Before the first protected order, we ask for a government ID so cooks feel safer accepting home service requests.
-          </Text>
-          <TextInput
-            value={documentType}
-            onChangeText={setDocumentType}
-            placeholder="Document type"
-            placeholderTextColor={activeTheme.textMuted}
-            style={styles.input}
-          />
-          <TextInput
-            value={documentNumber}
-            onChangeText={setDocumentNumber}
-            placeholder="Document number"
-            placeholderTextColor={activeTheme.textMuted}
-            autoCapitalize="characters"
-            style={styles.input}
-          />
-        </View>
-      ) : null}
-
-      {booking ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{booking.cookName}</Text>
-          <Text style={styles.bodyText}>{booking.dishSummary}</Text>
-          <Text style={styles.bodyText}>Date: {booking.serviceDateLabel}</Text>
-          <Text style={styles.bodyText}>
-            Service location: {booking.serviceMode === "cook_home" ? "Cook home" : "Explorer home"}
-          </Text>
-          <Text style={styles.bodyText}>Service type: {booking.serviceKind.replace(/_/g, " ")}</Text>
-          <Text style={styles.bodyText}>Guests: {booking.guestCount}</Text>
-          <Text style={styles.bodyText}>
-            Cook subtotal: {formatCurrency(booking.subtotalAmount, booking.explorerCountryCode)}
-          </Text>
-          {booking.ingredientBudgetAmount ? (
-            <Text style={styles.bodyText}>
-              Ingredient budget: {formatCurrency(booking.ingredientBudgetAmount, booking.explorerCountryCode)}
-            </Text>
-          ) : null}
-          {booking.wantedInMeal ? <Text style={styles.bodyText}>Must have: {booking.wantedInMeal}</Text> : null}
-          {booking.avoidInMeal ? <Text style={styles.bodyText}>Avoid: {booking.avoidInMeal}</Text> : null}
-          {booking.kitchenGuidance ? <Text style={styles.bodyText}>Kitchen guidance: {booking.kitchenGuidance}</Text> : null}
-          {booking.fitnessGoal ? <Text style={styles.bodyText}>Fitness goal: {booking.fitnessGoal}</Text> : null}
-          {booking.portionGuidance ? <Text style={styles.bodyText}>Portion target: {booking.portionGuidance}</Text> : null}
-          {booking.homeAccessNotes ? <Text style={styles.bodyText}>Home access note: {booking.homeAccessNotes}</Text> : null}
-          <Text style={styles.bodyText}>
-            Explorer fee: {formatCurrency(booking.explorerFeeAmount, booking.explorerCountryCode)}
-          </Text>
-          <Text style={styles.bodyText}>
-            Cook fee: {formatCurrency(booking.cookFeeAmount, booking.explorerCountryCode)}
-          </Text>
-          <Text style={styles.bodyText}>
-            Platform fee: {formatCurrency(booking.platformFeeAmount, booking.explorerCountryCode)}
-          </Text>
-          <Text style={styles.totalText}>
-            Total: {formatCurrency(booking.totalAmount, booking.explorerCountryCode)}
-          </Text>
-          <Text style={styles.bodyText}>
-            Funds held for cook after release: {formatCurrency(booking.payoutAmount, booking.explorerCountryCode)}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Future live provider</Text>
-        <Text style={styles.bodyText}>
-          We should move this live flow to Paystack next. Paystack&apos;s official docs show a backend-initialized transaction flow and split payments support, which is a strong fit for a Nigeria-first marketplace.
-        </Text>
-      </View>
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <Pressable style={styles.primaryButton} onPress={() => void handleCheckout()}>
-        <Text style={styles.primaryButtonText}>Complete dummy payment</Text>
+    <View style={styles.screen}>
+      <Pressable style={styles.fixedBackButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={18} color="#171713" />
       </Pressable>
+
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+      >
+        <View style={styles.phoneFrame}>
+          <View style={styles.heroImageCard}>
+            <Image source={heroFoodImages.assistant} style={styles.heroImage} contentFit="cover" />
+            <View style={styles.heroShade} />
+          </View>
+
+          <View style={styles.checkoutPanel}>
+            <Text style={styles.title}>Taste Journey Plus</Text>
+
+            {currentUser && shouldRequireExplorerVerificationForOrder(currentUser) ? (
+              <View style={styles.verificationCard}>
+                <Text style={styles.sectionTitle}>First-order identity check</Text>
+                <TextInput
+                  value={documentType}
+                  onChangeText={setDocumentType}
+                  placeholder="Document type"
+                  placeholderTextColor={activeTheme.textMuted}
+                  style={styles.input}
+                />
+                <TextInput
+                  value={documentNumber}
+                  onChangeText={setDocumentNumber}
+                  placeholder="Document number"
+                  placeholderTextColor={activeTheme.textMuted}
+                  autoCapitalize="characters"
+                  style={styles.input}
+                />
+              </View>
+            ) : null}
+
+            {plans.map((plan) => (
+              <View key={plan.id} style={[styles.planCard, plan.selected && styles.planCardSelected]}>
+                <View style={styles.planTopRow}>
+                  <Text style={styles.planPrice}>{plan.title}</Text>
+                  {plan.badge ? (
+                    <View style={styles.planBadge}>
+                      <Text style={styles.planBadgeText}>{plan.badge}</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.radio, plan.selected && styles.radioSelected]}>
+                    {plan.selected ? <Ionicons name="checkmark" size={12} color="#FFFFFF" /> : null}
+                  </View>
+                </View>
+                {plan.lines.map((line) => (
+                  <Text key={line} style={styles.planLine}>- {line}</Text>
+                ))}
+              </View>
+            ))}
+
+            {booking ? (
+              <Text style={styles.summaryText}>
+                {booking.cookName} will receive {formatCurrency(booking.payoutAmount, booking.explorerCountryCode)} after release.
+              </Text>
+            ) : null}
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <Pressable style={styles.primaryButton} onPress={() => void handleCheckout()}>
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
 
       {isLoading ? (
         <AuthProcessingScreen
-          title="Completing dummy payment"
-          subtitle="We're marking this booking as paid and opening the protected in-app thread."
+          title="Completing test Paystack"
+          subtitle="We're confirming the instant booking and updating the chef request."
         />
       ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
 const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
   StyleSheet.create({
-    screen: { flex: 1, backgroundColor: activeTheme.bg },
+    screen: { flex: 1, backgroundColor: activeTheme.surface },
+    fixedBackButton: {
+      position: "absolute",
+      top: theme.layout.screenTop,
+      left: theme.spacing.lg,
+      zIndex: 30,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.9)",
+    },
     content: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
-      paddingBottom: theme.spacing.xl,
-      gap: theme.spacing.lg,
+      paddingTop: 0,
+      paddingBottom: 0,
     },
-    eyebrow: { color: activeTheme.primaryDark, fontSize: 14, fontWeight: "800" },
-    title: { color: activeTheme.text, fontSize: 31, lineHeight: 37, fontWeight: "800" },
-    subtitle: { color: activeTheme.textMuted, fontSize: 15, lineHeight: 23 },
-    card: {
+    phoneFrame: {
+      width: "100%",
+      minHeight: "100%",
+      overflow: "hidden",
       backgroundColor: activeTheme.surface,
+    },
+    heroImageCard: {
+      height: 172,
+      overflow: "hidden",
+      backgroundColor: activeTheme.primaryDark,
+    },
+    heroImage: { width: "100%", height: "100%" },
+    heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.1)" },
+    checkoutPanel: {
+      marginTop: -24,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: activeTheme.surface,
+      padding: theme.spacing.lg,
+      gap: 13,
+    },
+    title: { color: activeTheme.text, fontSize: 24, lineHeight: 30, fontWeight: "900", textAlign: "center" },
+    planCard: {
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: theme.radius.lg,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
+      padding: theme.spacing.md,
+      gap: 5,
+      backgroundColor: activeTheme.surface,
     },
+    planCardSelected: {
+      borderColor: activeTheme.primaryDark,
+      backgroundColor: activeTheme.safeSurface,
+    },
+    planTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    planPrice: { flex: 1, color: activeTheme.text, fontSize: 14, fontWeight: "900" },
+    planBadge: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: "#FF8A1F",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    planBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
+    radio: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    radioSelected: { backgroundColor: activeTheme.primaryDark, borderColor: activeTheme.primaryDark },
+    planLine: { color: activeTheme.textMuted, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+    summaryText: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 18, textAlign: "center" },
     verificationCard: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      gap: 8,
       backgroundColor: activeTheme.warmSurface,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      borderRadius: theme.radius.lg,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
     },
-    sectionTitle: { color: activeTheme.text, fontSize: 20, fontWeight: "800" },
-    bodyText: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
-    totalText: { color: activeTheme.text, fontSize: 18, fontWeight: "800" },
-    errorText: { color: activeTheme.danger, fontSize: 13, lineHeight: 20 },
+    sectionTitle: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
     input: {
-      minHeight: 54,
-      borderRadius: theme.radius.md,
+      minHeight: 48,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      backgroundColor: activeTheme.surfaceElevated,
-      paddingHorizontal: 14,
+      backgroundColor: activeTheme.surface,
+      paddingHorizontal: 12,
       color: activeTheme.text,
     },
     primaryButton: {
       minHeight: 56,
-      borderRadius: theme.radius.md,
-      backgroundColor: activeTheme.primary,
+      borderRadius: theme.radius.pill,
+      backgroundColor: activeTheme.primaryDark,
       alignItems: "center",
       justifyContent: "center",
+      marginTop: 6,
     },
-    primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+    primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+    errorText: { color: activeTheme.danger, fontSize: 13, lineHeight: 20, textAlign: "center" },
   });
-

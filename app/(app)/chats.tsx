@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
 
 import RoundedAvatar from "@/components/RoundedAvatar";
@@ -26,7 +26,9 @@ import { getTheme, theme } from "@/theme/theme";
 export default function ChatsScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
-  const styles = createStyles(activeTheme);
+  const { width } = useWindowDimensions();
+  const isWideWeb = Platform.OS === "web" && width >= 900;
+  const styles = createStyles(activeTheme, isWideWeb);
   const [role, setRole] = useState<"explorer" | "cook">("explorer");
   const [threads, setThreads] = useState<ChatThreadRecord[]>([]);
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
@@ -150,17 +152,46 @@ export default function ChatsScreen() {
     );
   }
 
+  const visibleThreads = useMemo(() => {
+    const latestByPartner = new Map<string, ChatThreadRecord>();
+
+    threads.forEach((thread) => {
+      const partnerIdentifier = role === "cook" ? thread.explorerId : thread.cookId;
+      const currentThread = latestByPartner.get(partnerIdentifier);
+
+      if (
+        !currentThread ||
+        (thread.lastMessageAt || "").localeCompare(currentThread.lastMessageAt || "") > 0
+      ) {
+        latestByPartner.set(partnerIdentifier, thread);
+      }
+    });
+
+    return Array.from(latestByPartner.values()).sort((left, right) =>
+      (right.lastMessageAt || "").localeCompare(left.lastMessageAt || ""),
+    );
+  }, [role, threads]);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.screen}>
+      <View style={styles.backgroundBand} />
+      <View style={styles.backgroundTile} />
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Chats</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.kicker}>Messages</Text>
+          <Text style={styles.title}>Chats</Text>
+          <Text style={styles.subtitle}>Keep booking conversations, updates, and handoff details in one place.</Text>
+        </View>
         <View style={styles.headerPill}>
-          <Text style={styles.headerPillText}>{threads.length}</Text>
+          <Text style={styles.headerPillText}>{visibleThreads.length}</Text>
         </View>
       </View>
 
       <View style={styles.stack}>
-        {threads.map((thread) => {
+        {visibleThreads.map((thread) => {
           const partnerName = role === "cook" ? thread.explorerName : thread.cookName;
           const partnerIdentifier = role === "cook" ? thread.explorerId : thread.cookId;
           const unreadCount = currentUser ? getThreadUnreadCount(thread, currentUser) : 0;
@@ -226,26 +257,68 @@ export default function ChatsScreen() {
           );
         })}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
+const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boolean) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: activeTheme.bg },
+    scrollArea: { flex: 1 },
+    backgroundBand: {
+      position: "absolute",
+      top: -70,
+      left: -40,
+      right: -40,
+      height: 230,
+      borderBottomLeftRadius: 48,
+      borderBottomRightRadius: 48,
+      backgroundColor: activeTheme.warmSurface,
+      transform: [{ rotate: "-3deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 1 : 0.14,
+    },
+    backgroundTile: {
+      position: "absolute",
+      top: 128,
+      right: -82,
+      width: 220,
+      height: 130,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.safeSurface,
+      transform: [{ rotate: "12deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.72 : 0.12,
+    },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
       paddingBottom: 120,
-      gap: theme.spacing.md,
+      gap: theme.spacing.lg,
+      width: "100%",
+      maxWidth: isWideWeb ? 940 : undefined,
+      alignSelf: "center",
     },
     headerRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
-      marginBottom: theme.spacing.sm,
+      borderRadius: 34,
+      padding: theme.spacing.lg,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
-    title: { color: activeTheme.text, fontSize: 30, lineHeight: 34, fontWeight: "800" },
+    headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
+    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
+    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
@@ -266,9 +339,14 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: theme.radius.lg,
-      padding: theme.spacing.md,
-      minHeight: 82,
+      borderRadius: 28,
+      padding: theme.spacing.lg,
+      minHeight: 96,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 3,
     },
     chatBody: { flex: 1, gap: 4 },
     chatTopRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },

@@ -5,6 +5,7 @@ import {
   type CookVerification,
   getUserByEmail,
   getSession,
+  registerSingleDeviceSession,
   saveUserRecord,
   toSession,
   type AuthProvider,
@@ -245,12 +246,14 @@ export async function signUpWithEmail(payload: EmailSignUpPayload): Promise<Auth
     provider: "email",
     password,
   });
+  let sessionUser = user;
 
   try {
     await withTimeout(saveUserRecord(user), {
       timeoutMessage: "Saving your new account is taking too long. Please try again.",
     });
-    await createSession(toSession(user));
+    sessionUser = await registerSingleDeviceSession(user);
+    await createSession(toSession(sessionUser));
   } catch (error) {
     await deleteCurrentFirebaseAuthUser(nativeAuth);
     return {
@@ -264,7 +267,7 @@ export async function signUpWithEmail(payload: EmailSignUpPayload): Promise<Auth
 
   return {
     ok: true,
-    user,
+    user: sessionUser,
     needsProfile: true,
   };
 }
@@ -312,11 +315,12 @@ export async function signInWithEmail(payload: EmailSignInPayload): Promise<Auth
       return { ok: false, error: `Use ${providerLabel(existingUser.provider)} for this account.` };
     }
 
-    await createSession(toSession(existingUser));
+    const sessionUser = await registerSingleDeviceSession(existingUser);
+    await createSession(toSession(sessionUser));
 
     return {
       ok: true,
-      user: existingUser,
+      user: sessionUser,
       needsProfile: !existingUser.profileComplete,
     };
   }
@@ -346,10 +350,11 @@ export async function signInWithSocialProvider({
       return { ok: false, error: `That ${providerLabel(provider)} account is linked to a ${existingUser.role} profile.` };
     }
 
-    await createSession(toSession(existingUser));
+    const sessionUser = await registerSingleDeviceSession(existingUser);
+    await createSession(toSession(sessionUser));
     return {
       ok: true,
-      user: existingUser,
+      user: sessionUser,
       needsProfile: !existingUser.profileComplete,
     };
   }
@@ -364,12 +369,14 @@ export async function signInWithSocialProvider({
     provider,
     name: name ?? "",
   });
+  let sessionUser = user;
 
   try {
     await withTimeout(saveUserRecord(user), {
       timeoutMessage: "Saving your social sign-in profile is taking too long. Please try again.",
     });
-    await createSession(toSession(user));
+    sessionUser = await registerSingleDeviceSession(user);
+    await createSession(toSession(sessionUser));
   } catch (error) {
     return {
       ok: false,
@@ -379,7 +386,7 @@ export async function signInWithSocialProvider({
 
   return {
     ok: true,
-    user,
+    user: sessionUser,
     needsProfile: true,
   };
 }
@@ -469,7 +476,8 @@ export async function completeUserProfile(payload: ProfilePayload) {
     await withTimeout(saveUserRecord(nextUser), {
       timeoutMessage: "Saving your profile details is taking too long. Please try again.",
     });
-    await createSession(toSession(nextUser));
+    const sessionUser = await registerSingleDeviceSession(nextUser);
+    await createSession(toSession(sessionUser));
   } catch (error) {
     return {
       ok: false as const,
@@ -622,11 +630,12 @@ export async function signInExistingWithGoogle(): Promise<AuthResult> {
       };
     }
 
-    await createSession(toSession(existingUser));
+    const sessionUser = await registerSingleDeviceSession(existingUser);
+    await createSession(toSession(sessionUser));
 
     return {
       ok: true,
-      user: existingUser,
+      user: sessionUser,
       needsProfile: !existingUser.profileComplete,
     };
   } catch (error) {
@@ -711,6 +720,10 @@ function buildCookVerification(
     documentNumber: string;
   },
 ): CookVerification | null {
+  if (role !== "cook") {
+    return null;
+  }
+
   const hasDocumentBundle = Boolean(
     details.countryCode && details.countryName && details.documentType && details.documentNumber,
   );

@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   Pressable,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  Platform,
   useColorScheme,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -17,13 +20,14 @@ import {
   acceptCounterOfferAsExplorer,
   cancelBookingAsExplorer,
   counterBookingOfferAsExplorer,
+  isBookingThreadOpenWindow,
   isBookingThreadBlocked,
   releaseBookingFundsAsExplorer,
   rescheduleBookingAsExplorer,
-  serviceKindLabel,
   subscribeToBookingsForCurrentUser,
   type BookingRecord,
 } from "@/lib/marketplace";
+import { subscribeToNotificationsForCurrentUser } from "@/lib/notifications";
 import { getTheme, theme } from "@/theme/theme";
 
 type ActionState =
@@ -35,7 +39,9 @@ type ActionState =
 export default function BookingsScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
-  const styles = createStyles(activeTheme);
+  const { width } = useWindowDimensions();
+  const isWideWeb = Platform.OS === "web" && width >= 900;
+  const styles = createStyles(activeTheme, isWideWeb);
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<ActionState>(null);
@@ -44,21 +50,34 @@ export default function BookingsScreen() {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCancelled, setShowCancelled] = useState(false);
+  const [bookingView, setBookingView] = useState<"active" | "cancelled" | "completed">("active");
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const unsubscribe = subscribeToBookingsForCurrentUser(setBookings);
     return () => unsubscribe();
   }, []);
 
+  useEffect(
+    () =>
+      subscribeToNotificationsForCurrentUser((items) => {
+        setUnreadNotifications(items.filter((item) => !item.read).length);
+      }),
+    [],
+  );
+
   const liveBookings = bookings.filter(
     (item) =>
+      item.status !== "completed" &&
       item.status !== "funds_released" &&
       item.status !== "cancelled" &&
       item.status !== "declined",
   );
   const archivedBookings = bookings.filter(
     (item) => item.status === "cancelled" || item.status === "declined",
+  );
+  const completedBookings = bookings.filter(
+    (item) => item.status === "completed" || item.status === "funds_released",
   );
 
   function openAction(nextAction: NonNullable<ActionState>) {
@@ -94,20 +113,49 @@ export default function BookingsScreen() {
     }
   }
 
-  const visibleBookings = showCancelled
-    ? archivedBookings
-    : bookings.filter((item) => item.status !== "cancelled" && item.status !== "declined");
+  const visibleBookings =
+    bookingView === "cancelled"
+      ? archivedBookings
+      : bookingView === "completed"
+        ? completedBookings
+        : liveBookings;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.screen}>
+      <View style={styles.backgroundBand} />
+      <View style={styles.backgroundTile} />
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Bookings</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.kicker}>Explorer bookings</Text>
+          <Text style={styles.title}>Bookings</Text>
+          <Text style={styles.subtitle}>Track active meals, offers, payment holds, and release decisions.</Text>
+        </View>
         <View style={styles.headerActions}>
           <View style={styles.headerPill}>
             <Text style={styles.headerPillText}>{liveBookings.length}</Text>
           </View>
-          <Pressable style={styles.binButton} onPress={() => setShowCancelled((value) => !value)}>
-            <Ionicons name={showCancelled ? "archive-outline" : "trash-outline"} size={18} color={activeTheme.text} />
+          <Pressable
+            style={[styles.binButton, bookingView === "completed" && styles.binButtonActive]}
+            onPress={() => setBookingView((value) => (value === "completed" ? "active" : "completed"))}
+          >
+            <Ionicons name="wallet-outline" size={18} color={bookingView === "completed" ? "#FFFFFF" : activeTheme.text} />
+          </Pressable>
+          <Pressable
+            style={[styles.binButton, bookingView === "cancelled" && styles.binButtonActive]}
+            onPress={() => setBookingView((value) => (value === "cancelled" ? "active" : "cancelled"))}
+          >
+            <Ionicons name={bookingView === "cancelled" ? "archive-outline" : "trash-outline"} size={18} color={bookingView === "cancelled" ? "#FFFFFF" : activeTheme.text} />
+          </Pressable>
+          <Pressable style={styles.binButton} onPress={() => router.push("/notifications" as never)}>
+            <Ionicons name="notifications-outline" size={18} color={activeTheme.text} />
+            {unreadNotifications ? (
+              <View style={styles.smallBadge}>
+                <Text style={styles.smallBadgeText}>{unreadNotifications}</Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
       </View>
@@ -115,10 +163,18 @@ export default function BookingsScreen() {
       <View style={styles.stack}>
         {visibleBookings.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>{showCancelled ? "No cancelled bookings" : "No active bookings"}</Text>
+            <Text style={styles.emptyTitle}>
+              {bookingView === "cancelled"
+                ? "No cancelled bookings"
+                : bookingView === "completed"
+                  ? "No completed bookings"
+                  : "No active bookings"}
+            </Text>
             <Text style={styles.emptyBody}>
-              {showCancelled
+              {bookingView === "cancelled"
                 ? "Cancelled or declined bookings will be moved here."
+                : bookingView === "completed"
+                  ? "Completed services and released funds will show here."
                 : "Once you start sending requests, they will appear here in real time."}
             </Text>
           </View>
@@ -126,6 +182,7 @@ export default function BookingsScreen() {
 
         {visibleBookings.map((item) => {
           const blocked = isBookingThreadBlocked(item);
+          const canOpenThread = !blocked && isBookingThreadOpenWindow(item);
           const canRelease = item.status === "completed" && item.fundsReleaseStatus === "held";
           const isExpanded = expandedId === item.id;
 
@@ -154,29 +211,33 @@ export default function BookingsScreen() {
                 </View>
               </Pressable>
 
+              <View style={styles.summaryStrip}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Meal</Text>
+                  <Text numberOfLines={1} style={styles.summaryValue}>{item.dishSummary}</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Total</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCurrency(item.totalAmount, item.explorerCountryCode)}
+                  </Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Guests</Text>
+                  <Text style={styles.summaryValue}>{item.guestCount || "1"}</Text>
+                </View>
+              </View>
+
               {isExpanded ? (
                 <>
-                  <Text style={styles.requestDetail}>{item.dishSummary}</Text>
-                  <Text style={styles.requestDetail}>
-                    {serviceKindLabel(item.serviceKind)} at{" "}
-                    {item.serviceMode === "cook_home" ? "cook's home" : "your home"}
-                  </Text>
-                  {item.wantedInMeal ? <Text style={styles.requestDetail}>Must have: {item.wantedInMeal}</Text> : null}
-                  {item.avoidInMeal ? <Text style={styles.requestDetail}>Avoid: {item.avoidInMeal}</Text> : null}
-                  {item.kitchenGuidance ? <Text style={styles.requestDetail}>Kitchen guidance: {item.kitchenGuidance}</Text> : null}
-                  {item.fitnessGoal ? <Text style={styles.requestDetail}>Fitness goal: {item.fitnessGoal}</Text> : null}
-                  {item.portionGuidance ? <Text style={styles.requestDetail}>Portion target: {item.portionGuidance}</Text> : null}
-                  {item.homeAccessNotes ? <Text style={styles.requestDetail}>Home access: {item.homeAccessNotes}</Text> : null}
-                  <Text style={styles.requestDetail}>Guests: {item.guestCount}</Text>
                   <Text style={styles.requestDetail}>
                     Total {formatCurrency(item.totalAmount, item.explorerCountryCode)} • Cook payout{" "}
                     {formatCurrency(item.payoutAmount, item.explorerCountryCode)}
                   </Text>
                   {item.latestOfferNote ? <Text style={styles.requestNote}>Latest note: {item.latestOfferNote}</Text> : null}
-                  {item.cancellationReason ? <Text style={styles.requestNote}>Reason: {item.cancellationReason}</Text> : null}
 
                   <View style={styles.actionRow}>
-                    {!blocked ? (
+                    {canOpenThread ? (
                       <Pressable
                         style={styles.secondaryButton}
                         onPress={() =>
@@ -190,7 +251,9 @@ export default function BookingsScreen() {
                       </Pressable>
                     ) : (
                       <View style={styles.blockedPill}>
-                        <Text style={styles.blockedPillText}>Thread blocked</Text>
+                        <Text style={styles.blockedPillText}>
+                          {blocked ? "Thread closed" : "Thread opens near service time"}
+                        </Text>
                       </View>
                     )}
 
@@ -260,90 +323,133 @@ export default function BookingsScreen() {
         })}
       </View>
 
-      {actionState ? (
-        <View style={styles.actionSheet}>
-          <Text style={styles.sheetTitle}>
-            {actionState.type === "counter"
-              ? "Counter the price"
-              : actionState.type === "reschedule"
-                ? "Reschedule booking"
-                : "Cancel booking"}
-          </Text>
-
-          {actionState.type === "reschedule" ? (
-            <TextInput
-              value={dateValue}
-              onChangeText={setDateValue}
-              placeholder="New date and time"
-              placeholderTextColor={activeTheme.textMuted}
-              style={styles.input}
-            />
-          ) : null}
-
-          {actionState.type === "counter" ? (
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="New subtotal"
-              placeholderTextColor={activeTheme.textMuted}
-              keyboardType="decimal-pad"
-              style={styles.input}
-            />
-          ) : null}
-
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder={actionState.type === "cancel" ? "Optional final note" : "Add a note"}
-            placeholderTextColor={activeTheme.textMuted}
-            style={[styles.input, styles.textArea]}
-            multiline
-          />
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <View style={styles.sheetActions}>
-            <Pressable style={styles.secondaryButton} onPress={() => setActionState(null)}>
-              <Text style={styles.secondaryButtonText}>Close</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
-              disabled={isSubmitting}
-              onPress={() => void handleActionSubmit()}
-            >
-              <Text style={styles.primaryButtonText}>{isSubmitting ? "Saving..." : "Confirm"}</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
       {isSubmitting ? (
         <AuthProcessingScreen
           title="Updating booking"
           subtitle="We're saving this change and updating the cook in real time."
         />
       ) : null}
-    </ScrollView>
+      </ScrollView>
+      <Modal visible={Boolean(actionState)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.actionSheet}>
+            <Text style={styles.sheetTitle}>
+              {actionState?.type === "counter"
+                ? "Counter the price"
+                : actionState?.type === "reschedule"
+                  ? "Reschedule booking"
+                  : "Cancel booking"}
+            </Text>
+
+            {actionState?.type === "reschedule" ? (
+              <TextInput
+                value={dateValue}
+                onChangeText={setDateValue}
+                placeholder="New date and time"
+                placeholderTextColor={activeTheme.textMuted}
+                style={styles.input}
+              />
+            ) : null}
+
+            {actionState?.type === "counter" ? (
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="New subtotal"
+                placeholderTextColor={activeTheme.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+            ) : null}
+
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder={actionState?.type === "cancel" ? "Optional final note" : "Add a note"}
+              placeholderTextColor={activeTheme.textMuted}
+              style={[styles.input, styles.textArea]}
+              multiline
+            />
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <View style={styles.sheetActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setActionState(null)}>
+                <Text style={styles.secondaryButtonText}>Close</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
+                disabled={isSubmitting}
+                onPress={() => void handleActionSubmit()}
+              >
+                <Text style={styles.primaryButtonText}>{isSubmitting ? "Saving..." : "Confirm"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
-const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
+const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boolean) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: activeTheme.bg },
+    scrollArea: { flex: 1 },
+    backgroundBand: {
+      position: "absolute",
+      top: -70,
+      left: -40,
+      right: -40,
+      height: 230,
+      borderBottomLeftRadius: 48,
+      borderBottomRightRadius: 48,
+      backgroundColor: activeTheme.warmSurface,
+      transform: [{ rotate: "-3deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 1 : 0.14,
+    },
+    backgroundTile: {
+      position: "absolute",
+      top: 128,
+      right: -82,
+      width: 220,
+      height: 130,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.safeSurface,
+      transform: [{ rotate: "12deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.72 : 0.12,
+    },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.layout.screenTop,
+      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
       paddingBottom: 120,
-      gap: theme.spacing.md,
+      gap: theme.spacing.lg,
+      width: "100%",
+      maxWidth: isWideWeb ? 980 : undefined,
+      alignSelf: "center",
     },
     headerRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
-      marginBottom: theme.spacing.sm,
+      borderRadius: 34,
+      padding: theme.spacing.lg,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
+    headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-    title: { color: activeTheme.text, fontSize: 30, lineHeight: 34, fontWeight: "800" },
+    kicker: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+    title: { color: activeTheme.text, fontSize: isWideWeb ? 42 : 34, lineHeight: isWideWeb ? 48 : 39, fontWeight: "900" },
+    subtitle: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
@@ -366,10 +472,31 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       borderWidth: 1,
       borderColor: activeTheme.border,
     },
+    binButtonActive: {
+      backgroundColor: activeTheme.primaryDark,
+      borderColor: activeTheme.primaryDark,
+    },
+    smallBadge: {
+      position: "absolute",
+      top: -5,
+      right: -5,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: activeTheme.secondaryAccent,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 5,
+    },
+    smallBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 10,
+      fontWeight: "900",
+    },
     stack: { gap: theme.spacing.md },
     emptyCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 28,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
@@ -379,11 +506,16 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
     requestCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
+      borderRadius: 30,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
-      gap: 10,
+      gap: 12,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 3,
     },
     requestHeaderButton: {
       flexDirection: "row",
@@ -404,13 +536,37 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     requestTitle: { color: activeTheme.text, fontSize: 20, fontWeight: "800" },
     infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     infoText: { color: activeTheme.textMuted, fontSize: 14, fontWeight: "600" },
-    requestDetail: { color: activeTheme.text, fontSize: 15, lineHeight: 23 },
+    summaryStrip: {
+      flexDirection: "row",
+      gap: 8,
+      borderRadius: 20,
+      backgroundColor: activeTheme.surfaceElevated,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: 10,
+    },
+    summaryItem: {
+      flex: 1,
+      gap: 2,
+    },
+    summaryLabel: {
+      color: activeTheme.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    summaryValue: {
+      color: activeTheme.text,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    requestDetail: { display: "none" },
     requestNote: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 20 },
     actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
     secondaryButton: {
       minHeight: 44,
       paddingHorizontal: 14,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       borderWidth: 1,
       borderColor: activeTheme.border,
       alignItems: "center",
@@ -421,7 +577,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     primaryButton: {
       minHeight: 44,
       paddingHorizontal: 14,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: activeTheme.primary,
@@ -431,7 +587,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     dangerButton: {
       minHeight: 44,
       paddingHorizontal: 14,
-      borderRadius: theme.radius.md,
+      borderRadius: theme.radius.pill,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: activeTheme.danger,
@@ -446,6 +602,13 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       backgroundColor: activeTheme.surfaceElevated,
     },
     blockedPillText: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "700" },
+    modalBackdrop: {
+      flex: 1,
+      padding: theme.spacing.lg,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(14,15,12,0.46)",
+    },
     actionSheet: {
       backgroundColor: activeTheme.surface,
       borderRadius: theme.radius.lg,
@@ -453,6 +616,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
+      width: "100%",
+      maxWidth: 520,
     },
     sheetTitle: { color: activeTheme.text, fontSize: 19, fontWeight: "800" },
     input: {
