@@ -4,11 +4,39 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import RoundedAvatar from "@/components/RoundedAvatar";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
 import { getCookImage } from "@/lib/food-visuals";
+import { mealItems, type MealItem } from "@/lib/meal-data";
 import { isCookSaved, toggleSavedCook } from "@/lib/saved-cooks";
 import { getTheme, theme } from "@/theme/theme";
+
+function getCookMeals(cook: CookDirectoryRecord) {
+  const categories = cook.user.availableMealCategories || [];
+  const searchable = [cook.user.specialtiesText, cook.bio, cook.tags.join(" ")].join(" ").toLowerCase();
+
+  const matched = mealItems.filter(
+    (item) =>
+      categories.includes(item.category) ||
+      searchable.includes(item.category.toLowerCase()) ||
+      item.ingredients.some((ingredient) => searchable.includes(ingredient.toLowerCase())) ||
+      searchable.includes(item.title.toLowerCase()),
+  );
+
+  return (matched.length ? matched : mealItems).slice(0, 8);
+}
+
+function availabilityForMeal(item: MealItem, index: number) {
+  const windows = ["Today 6:30 PM", "Tomorrow 12:00 PM", "Tomorrow 7:00 PM", "Fri 5:30 PM"];
+  if (item.category === "Breakfast") {
+    return "Tomorrow 8:30 AM";
+  }
+  if (item.category === "Lunch") {
+    return "Today 12:30 PM";
+  }
+  return windows[index % windows.length];
+}
 
 export default function CookDetailScreen() {
   const colorScheme = useColorScheme();
@@ -48,11 +76,7 @@ export default function CookDetailScreen() {
   }
 
   if (cook === undefined) {
-    return (
-      <View style={styles.emptyScreen}>
-        <Text style={styles.emptyTitle}>Loading chef profile...</Text>
-      </View>
-    );
+    return <LogoLoadingScreen title="Loading chef profile" subtitle="Bringing in this cook's story, meals, and availability." />;
   }
 
   if (!cook) {
@@ -65,6 +89,7 @@ export default function CookDetailScreen() {
       </View>
     );
   }
+  const cookMeals = getCookMeals(cook);
 
   return (
     <View style={styles.screen}>
@@ -138,6 +163,52 @@ export default function CookDetailScreen() {
           </View>
         </View>
 
+        <View style={styles.mealsSection}>
+          <View style={styles.mealsHeader}>
+            <View>
+              <Text style={styles.mealsTitle}>Meals by {cook.name.split(" ")[0]}</Text>
+              <Text style={styles.mealsSubtitle}>Tap a dish to start checkout with this cook.</Text>
+            </View>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mealRow}>
+            {cookMeals.map((item, index) => (
+              <Pressable
+                key={item.id}
+                style={styles.mealCard}
+                onPress={() =>
+                  router.push({
+                    pathname: "/meal-item",
+                    params: { id: item.id, category: item.category, cookId: cook.id },
+                  } as never)
+                }
+              >
+                <Image source={item.image} style={styles.mealImage} contentFit="cover" />
+                <Text numberOfLines={1} style={styles.mealName}>{item.title}</Text>
+                <Text style={styles.mealTime}>{availabilityForMeal(item, index)}</Text>
+                <Text style={styles.mealPrice}>{item.priceHint}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Pressable
+            style={styles.specialOrderCard}
+            onPress={() =>
+              router.push({
+                pathname: "/booking-request",
+                params: { cookId: cook.id },
+              })
+            }
+          >
+            <View style={styles.specialOrderIcon}>
+              <Ionicons name="sparkles-outline" size={18} color={activeTheme.primaryDark} />
+            </View>
+            <View style={styles.specialOrderCopy}>
+              <Text style={styles.specialOrderTitle}>Special order</Text>
+              <Text style={styles.specialOrderBody}>Ask for a custom dish, diet plan, party tray, or private service.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={activeTheme.textMuted} />
+          </Pressable>
+        </View>
+
         <View style={styles.reviewsHeader}>
           <Text style={styles.reviewsTitle}>Reviews</Text>
           <Text style={styles.viewAllText}>View all</Text>
@@ -185,7 +256,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       justifyContent: "center",
       backgroundColor: "rgba(0,0,0,0.34)",
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.18)",
+      borderColor: "rgba(255,255,255,0.2)",
     },
     backButton: { left: theme.spacing.lg },
     moreButton: { right: theme.spacing.lg },
@@ -200,7 +271,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.22)" },
     accountTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
     profileCard: {
-      marginHorizontal: 0,
+      marginHorizontal: theme.spacing.lg,
       marginTop: -22,
       borderRadius: 28,
       backgroundColor: activeTheme.surface,
@@ -253,6 +324,50 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       alignItems: "center",
       justifyContent: "space-between",
     },
+    mealsSection: {
+      paddingHorizontal: theme.spacing.lg,
+      marginTop: 28,
+      gap: 14,
+    },
+    mealsHeader: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+    mealsTitle: { color: activeTheme.text, fontSize: 19, lineHeight: 24, fontWeight: "900" },
+    mealsSubtitle: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 19, marginTop: 3 },
+    mealRow: { gap: 12, paddingRight: theme.spacing.lg },
+    mealCard: {
+      width: 158,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surface,
+      padding: 10,
+      gap: 7,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    mealImage: { width: "100%", height: 112, borderRadius: 18 },
+    mealName: { color: activeTheme.text, fontSize: 14, fontWeight: "900" },
+    mealTime: { color: activeTheme.primaryDark, fontSize: 12, fontWeight: "900" },
+    mealPrice: { color: activeTheme.textMuted, fontSize: 12, fontWeight: "700" },
+    specialOrderCard: {
+      minHeight: 74,
+      borderRadius: 22,
+      backgroundColor: activeTheme.safeSurface,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    specialOrderIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.surface,
+    },
+    specialOrderCopy: { flex: 1, gap: 3 },
+    specialOrderTitle: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
+    specialOrderBody: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 17, fontWeight: "700" },
     reviewsTitle: { color: activeTheme.text, fontSize: 19, fontWeight: "900" },
     viewAllText: { color: "#FFAD5B", fontSize: 13, fontWeight: "800" },
     reviewCard: {

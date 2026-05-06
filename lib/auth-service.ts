@@ -315,8 +315,18 @@ export async function signInWithEmail(payload: EmailSignInPayload): Promise<Auth
       return { ok: false, error: `Use ${providerLabel(existingUser.provider)} for this account.` };
     }
 
-    const sessionUser = await registerSingleDeviceSession(existingUser);
-    await createSession(toSession(sessionUser));
+    let sessionUser: StoredUser;
+
+    try {
+      sessionUser = await registerSingleDeviceSession(existingUser);
+      await createSession(toSession(sessionUser));
+    } catch (error) {
+      await signOutFirebaseAuth(nativeAuth);
+      return {
+        ok: false,
+        error: formatAuthError(error, "We could not start a session on this device."),
+      };
+    }
 
     return {
       ok: true,
@@ -350,8 +360,19 @@ export async function signInWithSocialProvider({
       return { ok: false, error: `That ${providerLabel(provider)} account is linked to a ${existingUser.role} profile.` };
     }
 
-    const sessionUser = await registerSingleDeviceSession(existingUser);
-    await createSession(toSession(sessionUser));
+    let sessionUser: StoredUser;
+
+    try {
+      sessionUser = await registerSingleDeviceSession(existingUser);
+      await createSession(toSession(sessionUser));
+    } catch (error) {
+      await signOutFirebaseAuth(nativeAuth);
+      return {
+        ok: false,
+        error: formatAuthError(error, "We could not start a session on this device."),
+      };
+    }
+
     return {
       ok: true,
       user: sessionUser,
@@ -630,8 +651,18 @@ export async function signInExistingWithGoogle(): Promise<AuthResult> {
       };
     }
 
-    const sessionUser = await registerSingleDeviceSession(existingUser);
-    await createSession(toSession(sessionUser));
+    let sessionUser: StoredUser;
+
+    try {
+      sessionUser = await registerSingleDeviceSession(existingUser);
+      await createSession(toSession(sessionUser));
+    } catch (error) {
+      await signOutFirebaseAuth(nativeAuth);
+      return {
+        ok: false,
+        error: formatAuthError(error, "We could not start a session on this device."),
+      };
+    }
 
     return {
       ok: true,

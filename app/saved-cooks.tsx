@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "r
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import RoundedAvatar from "@/components/RoundedAvatar";
 import { fetchSavedCooks, toggleSavedCook } from "@/lib/saved-cooks";
 import type { CookDirectoryRecord } from "@/lib/cook-data";
@@ -29,11 +30,7 @@ export default function SavedCooksScreen() {
   }
 
   if (savedCooks === null) {
-    return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>Loading saved cooks...</Text>
-      </View>
-    );
+    return <LogoLoadingScreen title="Loading saved cooks" subtitle="Pulling in the cooks you kept close for fast rebooking." />;
   }
 
   return (

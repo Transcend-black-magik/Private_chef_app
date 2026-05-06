@@ -27,6 +27,7 @@ import {
   subscribeToBookingsForCurrentUser,
   type BookingRecord,
 } from "@/lib/marketplace";
+import { getHiddenArchivedBookingIds, hideArchivedBookingIds } from "@/lib/archived-booking-visibility";
 import { subscribeToNotificationsForCurrentUser } from "@/lib/notifications";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -35,6 +36,35 @@ type ActionState =
   | { type: "counter"; booking: BookingRecord }
   | { type: "cancel"; booking: BookingRecord }
   | null;
+
+function prettifyStatus(status: BookingRecord["status"]) {
+  return status.replace(/_/g, " ");
+}
+
+function compactServiceDate(value: string) {
+  return value
+    .replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/i, "")
+    .replace(/\b(\w+)\s+(\d{1,2}),\s*(\d{4})/i, "$1 $2")
+    .replace(/\s+at\s+/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getStatusAccentColor(status: BookingRecord["status"]) {
+  if (status === "accepted" || status === "completed" || status === "funds_released") {
+    return "#4D9F6F";
+  }
+
+  if (status === "cancelled" || status === "declined") {
+    return "#9B8B7B";
+  }
+
+  if (status === "awaiting_explorer" || status === "pending_payment") {
+    return "#D89B35";
+  }
+
+  return "#4D694E";
+}
 
 export default function BookingsScreen() {
   const colorScheme = useColorScheme();
@@ -51,6 +81,9 @@ export default function BookingsScreen() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingView, setBookingView] = useState<"active" | "cancelled" | "completed">("active");
+  const [locallyDeletedBookingIds, setLocallyDeletedBookingIds] = useState<Set<string>>(() => new Set());
+  const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(() => new Set());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
@@ -66,17 +99,36 @@ export default function BookingsScreen() {
     [],
   );
 
-  const liveBookings = bookings.filter(
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHiddenArchivedBookings() {
+      const ids = await getHiddenArchivedBookingIds();
+
+      if (!cancelled) {
+        setLocallyDeletedBookingIds(new Set(ids));
+      }
+    }
+
+    void loadHiddenArchivedBookings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleBookingRecords = bookings.filter((item) => !locallyDeletedBookingIds.has(item.id));
+  const liveBookings = visibleBookingRecords.filter(
     (item) =>
       item.status !== "completed" &&
       item.status !== "funds_released" &&
       item.status !== "cancelled" &&
       item.status !== "declined",
   );
-  const archivedBookings = bookings.filter(
+  const archivedBookings = visibleBookingRecords.filter(
     (item) => item.status === "cancelled" || item.status === "declined",
   );
-  const completedBookings = bookings.filter(
+  const completedBookings = visibleBookingRecords.filter(
     (item) => item.status === "completed" || item.status === "funds_released",
   );
 
@@ -113,6 +165,40 @@ export default function BookingsScreen() {
     }
   }
 
+  function toggleArchivedSelection(bookingId: string) {
+    setSelectedArchivedIds((current) => {
+      const next = new Set(current);
+      if (next.has(bookingId)) {
+        next.delete(bookingId);
+      } else {
+        next.add(bookingId);
+      }
+      return next;
+    });
+  }
+
+  function selectAllArchivedBookings() {
+    setSelectedArchivedIds(new Set(archivedBookings.map((item) => item.id)));
+  }
+
+  async function confirmArchivedDelete() {
+    const ids = pendingDeleteIds;
+
+    if (!ids.length) {
+      setPendingDeleteIds([]);
+      return;
+    }
+
+    const nextIds = await hideArchivedBookingIds(ids);
+    setLocallyDeletedBookingIds(new Set(nextIds));
+    setSelectedArchivedIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    setPendingDeleteIds([]);
+  }
+
   const visibleBookings =
     bookingView === "cancelled"
       ? archivedBookings
@@ -124,9 +210,7 @@ export default function BookingsScreen() {
     <View style={styles.screen}>
       <View style={styles.backgroundBand} />
       <View style={styles.backgroundTile} />
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
-                bounces={false}
-                overScrollMode="never">
+      <View style={styles.fixedTop}>
       <View style={styles.headerRow}>
         <View style={styles.headerGlow} />
         <View style={styles.headerCopy}>
@@ -135,14 +219,11 @@ export default function BookingsScreen() {
           <Text style={styles.subtitle}>Track active meals, offers, payment holds, and release decisions.</Text>
         </View>
         <View style={styles.headerActions}>
-          <View style={styles.headerPill}>
-            <Text style={styles.headerPillText}>{liveBookings.length}</Text>
-          </View>
           <Pressable
             style={[styles.binButton, bookingView === "completed" && styles.binButtonActive]}
             onPress={() => setBookingView((value) => (value === "completed" ? "active" : "completed"))}
           >
-            <Ionicons name="wallet-outline" size={18} color={bookingView === "completed" ? "#171713" : "#FFFFFF"} />
+            <Ionicons name="checkmark-done-outline" size={18} color={bookingView === "completed" ? "#171713" : "#FFFFFF"} />
           </Pressable>
           <Pressable
             style={[styles.binButton, bookingView === "cancelled" && styles.binButtonActive]}
@@ -178,7 +259,28 @@ export default function BookingsScreen() {
           <Text style={styles.metricLabel}>Archived</Text>
         </View>
       </View>
+      </View>
 
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
+      {bookingView === "cancelled" && archivedBookings.length ? (
+        <View style={styles.bulkBar}>
+          <Pressable style={styles.bulkButton} onPress={selectAllArchivedBookings}>
+            <Ionicons name="checkbox-outline" size={16} color={activeTheme.text} />
+            <Text style={styles.bulkButtonText}>Select all</Text>
+          </Pressable>
+          <Text style={styles.bulkMeta}>{selectedArchivedIds.size} selected</Text>
+          <Pressable
+            style={[styles.bulkDeleteButton, !selectedArchivedIds.size && styles.bulkDeleteButtonDisabled]}
+            disabled={!selectedArchivedIds.size}
+            onPress={() => setPendingDeleteIds(Array.from(selectedArchivedIds))}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.bulkDeleteText}>Delete</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.stack}>
         {visibleBookings.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -207,20 +309,33 @@ export default function BookingsScreen() {
 
           return (
             <View key={item.id} style={styles.requestCard}>
+              <View style={[styles.cardAccent, { backgroundColor: getStatusAccentColor(item.status) }]} />
+              {bookingView === "cancelled" ? (
+                <Pressable
+                  style={[styles.selectCircle, selectedArchivedIds.has(item.id) && styles.selectCircleActive]}
+                  onPress={() => toggleArchivedSelection(item.id)}
+                >
+                  {selectedArchivedIds.has(item.id) ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+                </Pressable>
+              ) : null}
               <Pressable
                 style={styles.requestHeaderButton}
                 onPress={() => setExpandedId((current) => (current === item.id ? null : item.id))}
               >
+                <View style={styles.avatarTile}>
+                  <Ionicons name="restaurant-outline" size={21} color={activeTheme.primaryDark} />
+                </View>
                 <View style={styles.requestTopCopy}>
                   <Text style={styles.requestTitle}>{item.cookName}</Text>
                   <View style={styles.infoRow}>
                     <Ionicons name="calendar-outline" size={16} color={activeTheme.textMuted} />
-                    <Text style={styles.infoText}>{item.serviceDateLabel}</Text>
+                    <Text numberOfLines={1} style={styles.infoText}>{compactServiceDate(item.serviceDateLabel)}</Text>
                   </View>
                 </View>
                 <View style={styles.requestHeaderRight}>
                   <View style={styles.statusPill}>
-                    <Text style={styles.statusText}>{item.status.replace(/_/g, " ")}</Text>
+                    <View style={styles.statusDot} />
+                    <Text style={styles.statusText}>{prettifyStatus(item.status)}</Text>
                   </View>
                   <Ionicons
                     name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -231,28 +346,51 @@ export default function BookingsScreen() {
               </Pressable>
 
               <View style={styles.summaryStrip}>
-                <View style={styles.summaryItem}>
+                <View style={[styles.summaryItem, styles.summaryItemLarge]}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="sparkles-outline" size={14} color={activeTheme.primaryDark} />
+                  </View>
                   <Text style={styles.summaryLabel}>Meal</Text>
                   <Text numberOfLines={1} style={styles.summaryValue}>{item.dishSummary}</Text>
                 </View>
                 <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="card-outline" size={14} color={activeTheme.primaryDark} />
+                  </View>
                   <Text style={styles.summaryLabel}>Total</Text>
                   <Text style={styles.summaryValue}>
                     {formatCurrency(item.totalAmount, item.explorerCountryCode)}
                   </Text>
                 </View>
                 <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="people-outline" size={14} color={activeTheme.primaryDark} />
+                  </View>
                   <Text style={styles.summaryLabel}>Guests</Text>
                   <Text style={styles.summaryValue}>{item.guestCount || "1"}</Text>
                 </View>
               </View>
 
               {isExpanded ? (
-                <>
-                  <Text style={styles.requestDetail}>
-                    Total {formatCurrency(item.totalAmount, item.explorerCountryCode)} • Cook payout{" "}
-                    {formatCurrency(item.payoutAmount, item.explorerCountryCode)}
-                  </Text>
+                <View style={styles.expandedPanel}>
+                  <View style={styles.detailGrid}>
+                    <View style={styles.detailItem}>
+                      <Ionicons name="receipt-outline" size={17} color={activeTheme.primaryDark} />
+                      <View style={styles.detailCopy}>
+                        <Text style={styles.detailLabel}>Total held</Text>
+                        <Text style={styles.requestDetail}>
+                          {formatCurrency(item.totalAmount, item.explorerCountryCode)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Ionicons name="shield-checkmark-outline" size={17} color={activeTheme.primaryDark} />
+                      <View style={styles.detailCopy}>
+                        <Text style={styles.detailLabel}>Funds</Text>
+                        <Text style={styles.requestDetail}>{item.fundsReleaseStatus.replace(/_/g, " ")}</Text>
+                      </View>
+                    </View>
+                  </View>
                   {item.latestOfferNote ? <Text style={styles.requestNote}>Latest note: {item.latestOfferNote}</Text> : null}
 
                   <View style={styles.actionRow}>
@@ -266,6 +404,7 @@ export default function BookingsScreen() {
                           })
                         }
                       >
+                        <Ionicons name="chatbubble-outline" size={16} color={activeTheme.text} />
                         <Text style={styles.secondaryButtonText}>Open thread</Text>
                       </Pressable>
                     ) : (
@@ -281,6 +420,7 @@ export default function BookingsScreen() {
                         style={styles.secondaryButton}
                         onPress={() => openAction({ type: "reschedule", booking: item })}
                       >
+                        <Ionicons name="calendar-clear-outline" size={16} color={activeTheme.text} />
                         <Text style={styles.secondaryButtonText}>Reschedule</Text>
                       </Pressable>
                     ) : null}
@@ -290,6 +430,7 @@ export default function BookingsScreen() {
                         style={styles.secondaryButton}
                         onPress={() => openAction({ type: "counter", booking: item })}
                       >
+                        <Ionicons name="swap-horizontal-outline" size={16} color={activeTheme.text} />
                         <Text style={styles.secondaryButtonText}>Counter</Text>
                       </Pressable>
                     ) : null}
@@ -299,6 +440,7 @@ export default function BookingsScreen() {
                         style={styles.primaryButton}
                         onPress={() => void acceptCounterOfferAsExplorer(item.id)}
                       >
+                        <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.primaryButtonText}>Accept offer</Text>
                       </Pressable>
                     ) : null}
@@ -313,6 +455,7 @@ export default function BookingsScreen() {
                           })
                         }
                       >
+                        <Ionicons name="lock-closed-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.primaryButtonText}>Hold funds</Text>
                       </Pressable>
                     ) : null}
@@ -322,6 +465,7 @@ export default function BookingsScreen() {
                         style={styles.primaryButton}
                         onPress={() => void releaseBookingFundsAsExplorer(item.id)}
                       >
+                        <Ionicons name="wallet-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.primaryButtonText}>Trust/release</Text>
                       </Pressable>
                     ) : null}
@@ -331,11 +475,22 @@ export default function BookingsScreen() {
                         style={styles.dangerButton}
                         onPress={() => openAction({ type: "cancel", booking: item })}
                       >
+                        <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.dangerButtonText}>Cancel</Text>
                       </Pressable>
                     ) : null}
+
+                    {(item.status === "cancelled" || item.status === "declined") ? (
+                      <Pressable
+                        style={styles.dangerButton}
+                        onPress={() => setPendingDeleteIds([item.id])}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.dangerButtonText}>Delete</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
-                </>
+                </View>
               ) : null}
             </View>
           );
@@ -349,6 +504,25 @@ export default function BookingsScreen() {
         />
       ) : null}
       </ScrollView>
+      <Modal visible={pendingDeleteIds.length > 0} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.actionSheet}>
+            <Text style={styles.sheetTitle}>Delete from archived?</Text>
+            <Text style={styles.confirmBody}>
+              This removes {pendingDeleteIds.length === 1 ? "this archived booking" : `${pendingDeleteIds.length} archived bookings`} from your view. Admin records stay available; only an admin can permanently delete records later.
+            </Text>
+            <View style={styles.sheetActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => setPendingDeleteIds([])}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.dangerButton} onPress={() => void confirmArchivedDelete()}>
+                <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.dangerButtonText}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={Boolean(actionState)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.actionSheet}>
@@ -442,11 +616,18 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      paddingTop: theme.spacing.md,
       paddingBottom: 120,
-      gap: theme.spacing.lg,
+      gap: theme.spacing.md,
       width: "100%",
       alignSelf: "center",
+    },
+    fixedTop: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: isWideWeb ? theme.spacing.lg : theme.layout.screenTop - 18,
+      backgroundColor: activeTheme.bg,
+      gap: theme.spacing.md,
+      zIndex: 5,
     },
     headerRow: {
       flexDirection: "row",
@@ -454,7 +635,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       borderRadius: 34,
       padding: theme.spacing.lg,
-      minHeight: isWideWeb ? 300 : 250,
+      minHeight: isWideWeb ? 220 : 178,
       overflow: "hidden",
       backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
@@ -465,8 +646,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
       marginHorizontal: -theme.spacing.lg,
-      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
-      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      marginTop: isWideWeb ? -theme.spacing.lg : -theme.layout.screenTop + 18,
+      paddingTop: isWideWeb ? theme.spacing.lg : theme.layout.screenTop - 2,
       borderTopLeftRadius: 0,
       borderTopRightRadius: 0,
     },
@@ -482,8 +663,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     kicker: { color: "#FFE0BD", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-    title: { color: "#FFFFFF", fontSize: isWideWeb ? 52 : 38, lineHeight: isWideWeb ? 58 : 44, fontWeight: "900" },
-    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, maxWidth: 560 },
+    title: { color: "#FFFFFF", fontSize: isWideWeb ? 44 : 32, lineHeight: isWideWeb ? 50 : 38, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 13, lineHeight: 19, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
@@ -513,12 +694,12 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     metricGrid: {
       flexDirection: "row",
       gap: 10,
-      marginTop: -44,
+      marginTop: -30,
     },
     metricCard: {
       flex: 1,
-      minHeight: 112,
-      borderRadius: 24,
+      minHeight: 88,
+      borderRadius: 20,
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
@@ -550,6 +731,39 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       fontWeight: "900",
     },
     stack: { gap: theme.spacing.md },
+    bulkBar: {
+      minHeight: 54,
+      borderRadius: 20,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    bulkButton: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: activeTheme.surfaceElevated,
+    },
+    bulkButtonText: { color: activeTheme.text, fontSize: 12, fontWeight: "900" },
+    bulkMeta: { flex: 1, color: activeTheme.textMuted, fontSize: 12, fontWeight: "800" },
+    bulkDeleteButton: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: activeTheme.danger,
+    },
+    bulkDeleteButtonDisabled: { opacity: 0.42 },
+    bulkDeleteText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
     emptyCard: {
       backgroundColor: activeTheme.surface,
       borderRadius: 28,
@@ -562,16 +776,45 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     emptyBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 22 },
     requestCard: {
       backgroundColor: activeTheme.surface,
-      borderRadius: 28,
+      borderRadius: 24,
       borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      gap: 12,
+      borderColor: activeTheme.bg === "#FFFFFF" ? "rgba(77,105,78,0.16)" : activeTheme.border,
+      padding: theme.spacing.md,
+      gap: 11,
+      overflow: "hidden",
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 3,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 7 },
+      elevation: 5,
+    },
+    selectCircle: {
+      position: "absolute",
+      top: 10,
+      right: 10,
+      zIndex: 4,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    selectCircleActive: {
+      backgroundColor: activeTheme.primaryDark,
+      borderColor: activeTheme.primaryDark,
+    },
+    cardAccent: {
+      position: "absolute",
+      left: 0,
+      top: 14,
+      bottom: 14,
+      width: 4,
+      borderTopRightRadius: 8,
+      borderBottomRightRadius: 8,
+      backgroundColor: activeTheme.primary,
     },
     requestHeaderButton: {
       flexDirection: "row",
@@ -579,31 +822,71 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       gap: 12,
     },
-    requestTopCopy: { flex: 1, gap: 4 },
-    requestHeaderRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-    statusPill: {
-      alignSelf: "flex-start",
-      backgroundColor: activeTheme.surfaceElevated,
-      borderRadius: theme.radius.pill,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    statusText: { color: activeTheme.accent, fontSize: 13, fontWeight: "800" },
-    requestTitle: { color: activeTheme.text, fontSize: 20, fontWeight: "800" },
-    infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    infoText: { color: activeTheme.textMuted, fontSize: 14, fontWeight: "600" },
-    summaryStrip: {
-      flexDirection: "row",
-      gap: 8,
-      borderRadius: 20,
+    avatarTile: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
       backgroundColor: activeTheme.safeSurface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      padding: 10,
+    },
+    requestTopCopy: { flex: 1, gap: 5, minWidth: 0 },
+    requestHeaderRight: { alignItems: "flex-end", gap: 8 },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      backgroundColor: activeTheme.surfaceElevated,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 11,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      maxWidth: 146,
+    },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: activeTheme.secondaryAccent,
+    },
+    statusText: { color: activeTheme.accent, fontSize: 12, fontWeight: "900", textTransform: "capitalize" },
+    requestTitle: { color: activeTheme.text, fontSize: 18, lineHeight: 23, fontWeight: "900" },
+    infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    infoText: { flex: 1, color: activeTheme.textMuted, fontSize: 13, fontWeight: "700" },
+    summaryStrip: {
+      flexDirection: "row",
+      gap: 10,
+      borderRadius: 20,
+      backgroundColor: activeTheme.bg === "#FFFFFF" ? "#F7FAF1" : activeTheme.safeSurface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: 8,
     },
     summaryItem: {
       flex: 1,
-      gap: 2,
+      minHeight: 58,
+      borderRadius: 15,
+      padding: 9,
+      gap: 3,
+      justifyContent: "flex-end",
+      backgroundColor: activeTheme.surface,
+    },
+    summaryItemLarge: {
+      flex: 1.35,
+    },
+    summaryIconWrap: {
+      position: "absolute",
+      top: 9,
+      right: 9,
+      width: 21,
+      height: 21,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.surfaceElevated,
     },
     summaryLabel: {
       color: activeTheme.textMuted,
@@ -616,10 +899,34 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       fontSize: 12,
       fontWeight: "900",
     },
-    requestDetail: { display: "none" },
+    expandedPanel: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.bg,
+      padding: 12,
+      gap: 10,
+    },
+    detailGrid: { flexDirection: "row", gap: 10 },
+    detailItem: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      borderRadius: 18,
+      padding: 12,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    detailCopy: { flex: 1, gap: 2, minWidth: 0 },
+    detailLabel: { color: activeTheme.textMuted, fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
+    requestDetail: { color: activeTheme.text, fontSize: 13, lineHeight: 19, fontWeight: "800" },
     requestNote: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 20 },
     actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
     secondaryButton: {
+      flexDirection: "row",
+      gap: 7,
       minHeight: 44,
       paddingHorizontal: 14,
       borderRadius: theme.radius.pill,
@@ -631,6 +938,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     secondaryButtonText: { color: activeTheme.text, fontSize: 14, fontWeight: "700" },
     primaryButton: {
+      flexDirection: "row",
+      gap: 7,
       minHeight: 44,
       paddingHorizontal: 14,
       borderRadius: theme.radius.pill,
@@ -641,6 +950,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     primaryButtonDisabled: { opacity: 0.6 },
     primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
     dangerButton: {
+      flexDirection: "row",
+      gap: 7,
       minHeight: 44,
       paddingHorizontal: 14,
       borderRadius: theme.radius.pill,
@@ -676,6 +987,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       maxWidth: 520,
     },
     sheetTitle: { color: activeTheme.text, fontSize: 19, fontWeight: "800" },
+    confirmBody: { color: activeTheme.textMuted, fontSize: 14, lineHeight: 21 },
     input: {
       backgroundColor: activeTheme.bg,
       borderWidth: 1,

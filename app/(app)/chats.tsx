@@ -193,9 +193,7 @@ export default function ChatsScreen() {
     <View style={styles.screen}>
       <View style={styles.backgroundBand} />
       <View style={styles.backgroundTile} />
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
-                bounces={false}
-                overScrollMode="never">
+      <View style={styles.fixedTop}>
       <View style={styles.headerRow}>
         <View style={styles.headerGlow} />
         <View style={styles.headerCopy}>
@@ -225,7 +223,11 @@ export default function ChatsScreen() {
           <Text style={styles.metricLabel}>Online</Text>
         </View>
       </View>
+      </View>
 
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never">
       <View style={styles.stack}>
         {!visibleThreads.length ? (
           <View style={styles.emptyCard}>
@@ -337,11 +339,18 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     content: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      paddingTop: theme.spacing.md,
       paddingBottom: 120,
-      gap: theme.spacing.lg,
+      gap: theme.spacing.md,
       width: "100%",
       alignSelf: "center",
+    },
+    fixedTop: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: isWideWeb ? theme.spacing.lg : theme.layout.screenTop - 18,
+      backgroundColor: activeTheme.bg,
+      gap: theme.spacing.md,
+      zIndex: 5,
     },
     headerRow: {
       flexDirection: "row",
@@ -349,7 +358,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       justifyContent: "space-between",
       borderRadius: 34,
       padding: theme.spacing.lg,
-      minHeight: isWideWeb ? 300 : 250,
+      minHeight: isWideWeb ? 220 : 178,
       overflow: "hidden",
       backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
@@ -360,8 +369,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       shadowOffset: { width: 0, height: 10 },
       elevation: 4,
       marginHorizontal: -theme.spacing.lg,
-      marginTop: isWideWeb ? -theme.spacing.xxl : -theme.layout.screenTop,
-      paddingTop: isWideWeb ? theme.spacing.xxl : theme.layout.screenTop,
+      marginTop: isWideWeb ? -theme.spacing.lg : -theme.layout.screenTop + 18,
+      paddingTop: isWideWeb ? theme.spacing.lg : theme.layout.screenTop - 2,
       borderTopLeftRadius: 0,
       borderTopRightRadius: 0,
     },
@@ -376,8 +385,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
     kicker: { color: "#FFE0BD", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-    title: { color: "#FFFFFF", fontSize: isWideWeb ? 52 : 38, lineHeight: isWideWeb ? 58 : 44, fontWeight: "900" },
-    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, maxWidth: 560 },
+    title: { color: "#FFFFFF", fontSize: isWideWeb ? 44 : 32, lineHeight: isWideWeb ? 50 : 38, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.82)", fontSize: 13, lineHeight: 19, maxWidth: 560 },
     headerPill: {
       minWidth: 34,
       height: 34,
@@ -393,16 +402,16 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     metricGrid: {
       flexDirection: "row",
       gap: 10,
-      marginTop: -44,
+      marginTop: -30,
     },
     metricCard: {
       flex: 1,
-      minHeight: 112,
-      borderRadius: 24,
+      minHeight: 88,
+      borderRadius: 20,
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      padding: theme.spacing.md,
+      padding: 13,
       justifyContent: "space-between",
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
@@ -433,13 +442,13 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: 26,
-      padding: theme.spacing.lg,
-      minHeight: 96,
+      borderRadius: 22,
+      padding: theme.spacing.md,
+      minHeight: 76,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
       elevation: 3,
     },
     chatBody: { flex: 1, gap: 4 },

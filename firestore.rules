@@ -142,6 +142,8 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).changedKeys().hasOnly(bookingCookMutableKeys())
         )
       );
+      allow delete: if isParticipant(resource.data) &&
+        resource.data.status in ["cancelled", "declined"];
     }
 
     match /chatThreads/{threadId} {

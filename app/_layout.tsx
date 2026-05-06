@@ -68,9 +68,12 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: activeTheme.bg },
+          fullScreenGestureShadowEnabled: false,
+          animationMatchesGesture: true,
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="search" options={{ animation: "fade" }} />
       </Stack>
     </>
   );

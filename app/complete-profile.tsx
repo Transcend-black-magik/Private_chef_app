@@ -16,6 +16,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { getCurrentUserRecord, saveUserRecord, type StoredUser } from "@/lib/app-state";
 import { detectLocationProfile, getDialCode } from "@/lib/location-phone";
 import { globalServiceAreas, mealCategories } from "@/lib/meal-data";
@@ -139,11 +140,7 @@ export default function CompleteProfileScreen() {
   const completion = useMemo(() => (user ? getProfileCompletion(user) : null), [user]);
 
   if (!user || !form || !completion) {
-    return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>Loading your profile...</Text>
-      </View>
-    );
+    return <LogoLoadingScreen title="Loading your profile" subtitle="Gathering your trust details and saved preferences." />;
   }
 
   const currentUser = user;

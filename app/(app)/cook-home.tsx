@@ -22,22 +22,22 @@ import { getTheme, theme } from "@/theme/theme";
 
 const cookServices = [
   {
-    title: "Home cooking",
-    body: "Private dining, weekly meals, family trays, and in-home cooking requests.",
+    title: "Private dining",
+    body: "In-home dinners, family-style setups, and refined hosting requests.",
     icon: "restaurant-outline" as const,
-    image: heroFoodImages.jollof,
+    image: heroFoodImages.chef,
     route: "/complete-profile" as const,
   },
   {
-    title: "Nutrition support",
-    body: "Offer meal prep, calorie-aware menus, gym goals, and nutritionist-style plans.",
-    icon: "fitness-outline" as const,
+    title: "Meal prep systems",
+    body: "Weekly prep, fitness plans, calorie-aware menus, and repeat kitchen routines.",
+    icon: "barbell-outline" as const,
     image: heroFoodImages.salad,
     route: "/complete-profile" as const,
   },
   {
-    title: "Paid recipes",
-    body: "Upload recipes, set a price, and let explorers pay to unlock the full method.",
+    title: "Paid recipe studio",
+    body: "Sell premium recipe access with structured methods, ingredients, and plating notes.",
     icon: "book-outline" as const,
     image: heroFoodImages.dessert,
     route: "/recipe-studio" as const,
@@ -45,9 +45,42 @@ const cookServices = [
 ];
 
 const marketplaceTools = [
-  { title: "Recipe review queue", body: "New public recipes wait for review before they become discoverable.", icon: "shield-checkmark-outline" as const },
-  { title: "Promotion boosts", body: "Pay for featured placement when you want more eyes on a service or recipe.", icon: "megaphone-outline" as const },
-  { title: "Search signals", body: "Specialties, service area, nutrition notes, and recipe tags shape explorer search.", icon: "search-outline" as const },
+  {
+    title: "Search ranking",
+    body: "Specialties, location, trust signals, and category coverage decide discovery strength.",
+    icon: "search-outline" as const,
+  },
+  {
+    title: "Recipe approval",
+    body: "New paid recipes can move through review before they become public and searchable.",
+    icon: "shield-checkmark-outline" as const,
+  },
+  {
+    title: "Boost placement",
+    body: "Promote your strongest services when you want more explorer attention this week.",
+    icon: "megaphone-outline" as const,
+  },
+];
+
+const actionCards = [
+  {
+    title: "Requests",
+    body: "See fresh demand, follow up faster, and keep your response time sharp.",
+    icon: "mail-open-outline" as const,
+    route: "/requests" as const,
+  },
+  {
+    title: "Profile",
+    body: "Tighten your trust, area, specialties, and availability without hunting through settings.",
+    icon: "create-outline" as const,
+    route: "/complete-profile" as const,
+  },
+  {
+    title: "Recipes",
+    body: "Build paid recipe products that can earn even when you are not actively booking.",
+    icon: "journal-outline" as const,
+    route: "/recipe-studio" as const,
+  },
 ];
 
 export default function CookHomeScreen() {
@@ -93,22 +126,56 @@ export default function CookHomeScreen() {
 
   const completion = user ? getProfileCompletion(user) : null;
   const profileCopy = getProfileCompletionCopy("cook");
+  const verificationStatus = user?.cookVerification?.status || "not_started";
+  const selectedCategories = user?.availableMealCategories?.length
+    ? user.availableMealCategories
+    : mealCategories.slice(0, 4);
 
-  const requestStats = useMemo(
+  const insightCards = useMemo(
     () => [
-      { label: "Profile trust", value: completion ? `${completion.percent}%` : "--" },
+      {
+        label: "Profile trust",
+        value: completion ? `${completion.percent}%` : "--",
+        tone: "soft" as const,
+      },
       {
         label: "Verification",
         value:
-          user?.cookVerification?.status === "verified"
+          verificationStatus === "verified"
             ? "Verified"
-            : user?.cookVerification?.status === "pending_review"
+            : verificationStatus === "pending_review"
               ? "Reviewing"
               : "Pending",
+        tone: verificationStatus === "verified" ? ("primary" as const) : ("soft" as const),
       },
-      { label: "Service area", value: user?.serviceAreaLabel || user?.city || "Not set" },
+      {
+        label: "Service area",
+        value: user?.serviceAreaLabel || user?.city || "Not set",
+        tone: "soft" as const,
+      },
     ],
-    [completion, user],
+    [completion, user, verificationStatus],
+  );
+
+  const growthChecklist = useMemo(
+    () => [
+      {
+        title: "Complete trust profile",
+        body: "Sharper bios, specialties, safety notes, and area settings convert more explorer visits.",
+        done: Boolean(completion && completion.percent >= 100),
+      },
+      {
+        title: "Finish identity review",
+        body: "Verified cooks look more reliable before the first message and booking decision.",
+        done: verificationStatus === "verified",
+      },
+      {
+        title: "Cover more meal moments",
+        body: "Breakfast, lunch, dinner, healthy, and meal prep increase search entry points.",
+        done: (user?.availableMealCategories?.length || 0) >= 4,
+      },
+    ],
+    [completion, user, verificationStatus],
   );
 
   return (
@@ -116,17 +183,23 @@ export default function CookHomeScreen() {
       style={styles.screen}
       contentContainerStyle={[styles.content, isWideWeb && styles.contentWide]}
       showsVerticalScrollIndicator={false}
-                bounces={false}
-                overScrollMode="never"
+      bounces={false}
+      overScrollMode="never"
     >
-      <View style={styles.backgroundBand} />
+      <View style={styles.backgroundAura} />
       <View style={styles.backgroundTile} />
 
-      <View style={[styles.headerPanel, !isWideWeb && styles.headerPanelMobileFullBleed]}>
-        <Image source={heroFoodImages.chef} style={styles.headerImage} contentFit="cover" />
-        <View style={styles.headerShade} />
-        <View style={styles.headerTopRow}>
-          <Text style={styles.eyebrow}>Cook Home</Text>
+      <View style={[styles.heroStage, !isWideWeb && styles.heroStageMobileFullBleed]}>
+        <Image source={heroFoodImages.chef} style={styles.heroImage} contentFit="cover" />
+        <View style={styles.heroShade} />
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTopCopy}>
+            <Text style={styles.eyebrow}>Cook Studio</Text>
+            <Text style={styles.heroTitle}>Welcome back, {firstName}.</Text>
+            <Text style={styles.heroSubtitle}>
+              Run your cook profile like a premium service brand, not just a listing.
+            </Text>
+          </View>
           <Pressable style={styles.notificationButton} onPress={() => router.push("/notifications" as never)}>
             <Ionicons name="notifications-outline" size={20} color="#171713" />
             {unreadNotifications ? (
@@ -136,22 +209,47 @@ export default function CookHomeScreen() {
             ) : null}
           </Pressable>
         </View>
-        <Text style={styles.title}>Welcome back, {firstName}.</Text>
-        <Text style={styles.subtitle}>
-          Keep your trust signals, service area, and incoming interest in one calm place.
-        </Text>
+
+        <View style={styles.heroChipRow}>
+          <View style={styles.heroChip}>
+            <Ionicons name="sparkles-outline" size={14} color="#FFFFFF" />
+            <Text style={styles.heroChipText}>
+              {verificationStatus === "verified" ? "High trust profile" : "Trust still building"}
+            </Text>
+          </View>
+          <View style={styles.heroChipMuted}>
+            <Ionicons name="location-outline" size={14} color="#FFFFFF" />
+            <Text style={styles.heroChipText}>{user?.serviceAreaLabel || user?.city || "Add area"}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.insightRail}>
+        {insightCards.map((item) => (
+          <View
+            key={item.label}
+            style={[styles.insightCard, item.tone === "primary" && styles.insightCardPrimary]}
+          >
+            <Text style={[styles.insightLabel, item.tone === "primary" && styles.insightLabelPrimary]}>
+              {item.label}
+            </Text>
+            <Text style={[styles.insightValue, item.tone === "primary" && styles.insightValuePrimary]} numberOfLines={1}>
+              {item.value}
+            </Text>
+          </View>
+        ))}
       </View>
 
       {completion && completion.percent < 100 ? (
-        <Pressable style={styles.completeProfileCard} onPress={() => router.push("/complete-profile")}>
-          <Image source={heroFoodImages.platter} style={styles.completeProfileImage} contentFit="cover" />
-          <View style={styles.completeProfileShade} />
-          <View style={styles.completeProfileContent}>
-            <View style={styles.completeProfileHeader}>
-              <View style={styles.completeProfileCopy}>
-                <Text style={styles.completeProfileEyebrow}>Cook profile</Text>
-                <Text style={styles.completeProfileTitle}>{profileCopy.title}</Text>
-                <Text style={styles.completeProfileSubtitle}>{profileCopy.subtitle}</Text>
+        <Pressable style={styles.completionSpotlight} onPress={() => router.push("/complete-profile")}>
+          <Image source={heroFoodImages.platter} style={styles.completionImage} contentFit="cover" />
+          <View style={styles.completionShade} />
+          <View style={styles.completionContent}>
+            <View style={styles.completionHeader}>
+              <View style={styles.completionCopy}>
+                <Text style={styles.completionEyebrow}>Next move</Text>
+                <Text style={styles.completionTitle}>{profileCopy.title}</Text>
+                <Text style={styles.completionBody}>{profileCopy.subtitle}</Text>
               </View>
               <View style={styles.progressBadge}>
                 <Text style={styles.progressBadgeText}>{completion.percent}%</Text>
@@ -160,32 +258,94 @@ export default function CookHomeScreen() {
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${completion.percent}%` }]} />
             </View>
-            <View style={styles.completeProfileFooter}>
-              <Text style={styles.completeProfileLink}>{profileCopy.cta}</Text>
+            <View style={styles.completionFooter}>
+              <Text style={styles.completionLink}>{profileCopy.cta}</Text>
               <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </View>
           </View>
         </Pressable>
       ) : null}
 
-      <View style={styles.statsRow}>
-        {requestStats.map((item) => (
-          <View key={item.label} style={styles.statCard}>
-            <Text style={styles.statValue}>{item.value}</Text>
-            <Text style={styles.statLabel}>{item.label}</Text>
-          </View>
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Command deck</Text>
+          <Text style={styles.sectionBody}>The three fastest ways to tighten growth, demand, and revenue.</Text>
+        </View>
+      </View>
+      <View style={styles.commandGrid}>
+        {actionCards.map((card) => (
+          <Pressable
+            key={card.title}
+            style={styles.commandCard}
+            onPress={() => router.push(card.route as never)}
+          >
+            <View style={styles.commandIcon}>
+              <Ionicons name={card.icon} size={18} color={activeTheme.primaryDark} />
+            </View>
+            <Text style={styles.commandTitle}>{card.title}</Text>
+            <Text style={styles.commandBody}>{card.body}</Text>
+          </Pressable>
         ))}
+      </View>
+
+      <View style={styles.discoveryBoard}>
+        <View style={styles.discoveryHeader}>
+          <View>
+            <Text style={styles.discoveryKicker}>Discovery setup</Text>
+            <Text style={styles.discoveryTitle}>How explorers will read your offer</Text>
+          </View>
+          <Pressable style={styles.discoveryButton} onPress={() => router.push("/complete-profile" as never)}>
+            <Text style={styles.discoveryButtonText}>Refine</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.discoveryAreaRow}>
+          <View style={styles.discoveryAreaCard}>
+            <Text style={styles.discoveryAreaLabel}>Primary area</Text>
+            <Text style={styles.discoveryAreaValue}>{user?.serviceAreaLabel || user?.city || "Set your area"}</Text>
+            <Text style={styles.discoveryAreaBody}>
+              {user?.serviceRadiusMiles
+                ? `${user.serviceRadiusMiles} mile travel radius set`
+                : "Add a travel radius to widen useful local matches."}
+            </Text>
+          </View>
+          <View style={styles.discoveryAreaCard}>
+            <Text style={styles.discoveryAreaLabel}>Search coverage</Text>
+            <Text style={styles.discoveryAreaValue}>{selectedCategories.length} meal moments</Text>
+            <Text style={styles.discoveryAreaBody}>Broader category coverage creates more ways to be discovered.</Text>
+          </View>
+        </View>
+
+        <View style={styles.categoryWrap}>
+          {selectedCategories.map((category) => (
+            <View key={category} style={styles.categoryChip}>
+              <Text style={styles.categoryChipText}>{category}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.sampleMealRow}>
+          {mealItems.slice(0, 4).map((item) => (
+            <View key={item.id} style={styles.sampleMealPill}>
+              <Text style={styles.sampleMealText}>{item.title}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.sectionHeader}>
         <View>
-          <Text style={styles.sectionTitle}>Services you can sell</Text>
-          <Text style={styles.sectionBody}>Build the supply side explorers search for: cooks, nutrition support, and paid recipes.</Text>
+          <Text style={styles.sectionTitle}>Sellable formats</Text>
+          <Text style={styles.sectionBody}>Build a cook business that does more than wait for one kind of request.</Text>
         </View>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                bounces={false}
-                overScrollMode="never" contentContainerStyle={styles.serviceRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.serviceRow}
+      >
         {cookServices.map((service) => (
           <Pressable
             key={service.title}
@@ -194,7 +354,7 @@ export default function CookHomeScreen() {
           >
             <Image source={service.image} style={styles.serviceImage} contentFit="cover" />
             <View style={styles.serviceShade} />
-            <View style={styles.serviceIcon}>
+            <View style={styles.serviceBadge}>
               <Ionicons name={service.icon} size={18} color="#FFFFFF" />
             </View>
             <View style={styles.serviceCopy}>
@@ -208,8 +368,8 @@ export default function CookHomeScreen() {
       <View style={styles.marketplacePanel}>
         <View style={styles.marketplaceHeader}>
           <View>
-            <Text style={styles.cardTitle}>Marketplace engine</Text>
-            <Text style={styles.cardText}>Everything here feeds discovery, paid recipe access, and promotion.</Text>
+            <Text style={styles.sectionTitle}>Marketplace engine</Text>
+            <Text style={styles.sectionBody}>These levers shape how your profile and recipes perform in the app.</Text>
           </View>
           <Pressable style={styles.marketplaceButton} onPress={() => router.push("/recipe-studio" as never)}>
             <Ionicons name="add" size={18} color="#FFFFFF" />
@@ -229,60 +389,34 @@ export default function CookHomeScreen() {
         </View>
       </View>
 
-      <View style={styles.availabilityCard}>
-        <View style={styles.availabilityTop}>
-          <View>
-            <Text style={styles.cardTitle}>
-              {user?.cookVerification?.status === "verified"
-                ? "Ready for stronger discovery."
-                : "Trust signals still need attention."}
-            </Text>
-            <Text style={styles.cardText}>
-              {user?.cookVerification?.status === "verified"
-                ? "Explorers can find your service area, cooking specialties, safety details, and nutrition tags."
-                : "Finish profile details so explorer search can match you to meals, nutrition needs, and local bookings."}
-            </Text>
-          </View>
-          <View style={styles.availabilityPill}>
-            <Text style={styles.availabilityText}>
-              {user?.serviceAreaLabel || "Set service area"}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.availabilityCard}>
-        <Text style={styles.cardTitle}>Immediate meal matching</Text>
-        <Text style={styles.cardText}>
-          Choose these in profile setup so explorers searching breakfast, lunch, dinner, meal prep, healthy, or dessert can match with you faster.
-        </Text>
-        <View style={styles.categoryRow}>
-          {mealCategories.map((category) => {
-            const selected = user?.availableMealCategories?.includes(category);
-            return (
-              <View key={category} style={[styles.categoryChip, selected && styles.categoryChipActive]}>
-                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextActive]}>
-                  {category}
-                </Text>
+      <View style={styles.roadmapCard}>
+        <Text style={styles.sectionTitle}>Growth roadmap</Text>
+        <Text style={styles.sectionBody}>A tighter sequence for turning profile polish into real bookings.</Text>
+        <View style={styles.roadmapList}>
+          {growthChecklist.map((item, index) => (
+            <View key={item.title} style={styles.roadmapItem}>
+              <View style={[styles.roadmapIndex, item.done && styles.roadmapIndexDone]}>
+                {item.done ? (
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.roadmapIndexText}>{index + 1}</Text>
+                )}
               </View>
-            );
-          })}
-        </View>
-        <View style={styles.suggestionRow}>
-          {mealItems.slice(0, 4).map((item) => (
-            <View key={item.id} style={styles.suggestionPill}>
-              <Text style={styles.suggestionPillText}>{item.title}</Text>
+              <View style={styles.roadmapCopy}>
+                <Text style={styles.roadmapTitle}>{item.title}</Text>
+                <Text style={styles.roadmapBody}>{item.body}</Text>
+              </View>
             </View>
           ))}
         </View>
       </View>
 
       <View style={styles.actionRow}>
-        <Pressable style={styles.secondaryButton} onPress={() => router.push("/complete-profile")}>
+        <Pressable style={styles.secondaryButton} onPress={() => router.push("/complete-profile" as never)}>
           <Text style={styles.secondaryButtonText}>Edit profile</Text>
         </Pressable>
-        <Pressable style={styles.primaryButton} onPress={() => router.push("/requests")}>
-          <Text style={styles.primaryButtonText}>View requests</Text>
+        <Pressable style={styles.primaryButton} onPress={() => router.push("/requests" as never)}>
+          <Text style={styles.primaryButtonText}>Open requests</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -309,59 +443,90 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       paddingTop: theme.spacing.xl,
       gap: theme.spacing.xl,
     },
-    backgroundBand: {
+    backgroundAura: {
       position: "absolute",
-      top: -70,
-      left: -40,
-      right: -40,
-      height: 230,
-      borderBottomLeftRadius: 48,
-      borderBottomRightRadius: 48,
+      top: -110,
+      left: -30,
+      right: -30,
+      height: 280,
+      borderBottomLeftRadius: 64,
+      borderBottomRightRadius: 64,
       backgroundColor: activeTheme.warmSurface,
-      transform: [{ rotate: "-3deg" }],
-      opacity: activeTheme.bg === "#FFFFFF" ? 1 : 0.14,
+      transform: [{ rotate: "-4deg" }],
+      opacity: activeTheme.bg === "#FFFFFF" ? 0.95 : 0.14,
     },
     backgroundTile: {
       position: "absolute",
-      top: 128,
-      right: -82,
+      top: 340,
+      right: -90,
       width: 220,
-      height: 130,
-      borderRadius: 34,
+      height: 140,
+      borderRadius: 40,
       borderWidth: 1,
       borderColor: activeTheme.border,
       backgroundColor: activeTheme.safeSurface,
-      transform: [{ rotate: "12deg" }],
+      transform: [{ rotate: "11deg" }],
       opacity: activeTheme.bg === "#FFFFFF" ? 0.72 : 0.12,
     },
-    headerPanel: {
-      minHeight: isWideWeb ? 420 : 260,
-      borderRadius: isWideWeb ? 38 : 34,
+    heroStage: {
+      minHeight: isWideWeb ? 420 : 320,
+      borderRadius: isWideWeb ? 42 : 36,
       overflow: "hidden",
       padding: isWideWeb ? theme.spacing.xl : theme.spacing.lg,
-      justifyContent: "flex-end",
-      gap: 8,
-      backgroundColor: activeTheme.primaryDark,
+      justifyContent: "space-between",
+      backgroundColor: "#151712",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 16 },
+      elevation: 8,
     },
-    headerPanelMobileFullBleed: {
+    heroStageMobileFullBleed: {
       marginHorizontal: -theme.spacing.lg,
       marginTop: -theme.layout.screenTop,
-      borderRadius: 0,
-      minHeight: 330,
+      minHeight: 360,
+      borderTopLeftRadius: 0,
+      borderTopRightRadius: 0,
+      borderBottomLeftRadius: 36,
+      borderBottomRightRadius: 36,
       paddingTop: theme.layout.screenTop,
     },
-    headerImage: { ...StyleSheet.absoluteFillObject },
-    headerShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-    headerTopRow: {
+    heroImage: { ...StyleSheet.absoluteFillObject },
+    heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+    heroTopRow: {
       flexDirection: "row",
-      alignItems: "center",
       justifyContent: "space-between",
-      marginBottom: "auto",
+      alignItems: "flex-start",
+      gap: 16,
+    },
+    heroTopCopy: {
+      flex: 1,
+      gap: 8,
+      maxWidth: isWideWeb ? 620 : 320,
+    },
+    eyebrow: {
+      color: "#FFE0BD",
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+      letterSpacing: 0,
+    },
+    heroTitle: {
+      color: "#FFFFFF",
+      fontSize: isWideWeb ? 52 : 34,
+      lineHeight: isWideWeb ? 58 : 40,
+      fontWeight: "900",
+    },
+    heroSubtitle: {
+      color: "rgba(255,255,255,0.84)",
+      fontSize: 15,
+      lineHeight: 23,
+      maxWidth: 420,
     },
     notificationButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 16,
+      width: 46,
+      height: 46,
+      borderRadius: 18,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: "rgba(255,255,255,0.92)",
@@ -383,93 +548,143 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       fontSize: 10,
       fontWeight: "900",
     },
-    eyebrow: {
-      color: "#FFE0BD",
-      fontSize: 14,
-      fontWeight: "900",
+    heroChipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
     },
-    title: {
+    heroChip: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 14,
+      backgroundColor: "rgba(255,255,255,0.18)",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+    },
+    heroChipMuted: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 14,
+      backgroundColor: "rgba(0,0,0,0.28)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.16)",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+    },
+    heroChipText: {
       color: "#FFFFFF",
-      fontSize: isWideWeb ? 52 : 32,
-      lineHeight: isWideWeb ? 58 : 38,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    insightRail: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: -52,
+      zIndex: 5,
+    },
+    insightCard: {
+      flex: 1,
+      minHeight: 98,
+      borderRadius: 28,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      justifyContent: "space-between",
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 0.35,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 3,
+    },
+    insightCardPrimary: {
+      backgroundColor: activeTheme.primaryDark,
+      borderColor: activeTheme.primaryDark,
+    },
+    insightLabel: {
+      color: activeTheme.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    insightLabelPrimary: {
+      color: "rgba(255,255,255,0.76)",
+    },
+    insightValue: {
+      color: activeTheme.text,
+      fontSize: 18,
       fontWeight: "900",
-      maxWidth: isWideWeb ? 620 : 340,
     },
-    subtitle: {
-      color: "rgba(255,255,255,0.84)",
-      fontSize: 16,
-      lineHeight: 24,
-      maxWidth: 350,
+    insightValuePrimary: {
+      color: "#FFFFFF",
     },
-    completeProfileCard: {
+    completionSpotlight: {
       minHeight: 220,
+      borderRadius: 32,
       overflow: "hidden",
       backgroundColor: activeTheme.primaryDark,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      borderRadius: 30,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 10 },
       elevation: 5,
     },
-    completeProfileImage: { ...StyleSheet.absoluteFillObject },
-    completeProfileShade: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.5)",
-    },
-    completeProfileContent: {
+    completionImage: { ...StyleSheet.absoluteFillObject },
+    completionShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.52)" },
+    completionContent: {
       flex: 1,
       padding: theme.spacing.lg,
       justifyContent: "space-between",
       gap: 16,
     },
-    completeProfileHeader: {
+    completionHeader: {
       flexDirection: "row",
-      gap: 12,
       justifyContent: "space-between",
+      gap: 12,
     },
-    completeProfileCopy: {
+    completionCopy: {
       flex: 1,
       gap: 6,
     },
-    completeProfileEyebrow: {
+    completionEyebrow: {
       color: "#FFE0BD",
       fontSize: 12,
       fontWeight: "900",
       textTransform: "uppercase",
     },
-    completeProfileTitle: {
+    completionTitle: {
       color: "#FFFFFF",
       fontSize: 24,
       lineHeight: 30,
       fontWeight: "900",
     },
-    completeProfileSubtitle: {
+    completionBody: {
       color: "rgba(255,255,255,0.84)",
       fontSize: 14,
       lineHeight: 21,
     },
     progressBadge: {
       minWidth: 62,
-      height: 36,
+      height: 38,
       borderRadius: theme.radius.pill,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.primary,
-      alignSelf: "flex-start",
+      backgroundColor: "rgba(255,255,255,0.16)",
       paddingHorizontal: 12,
+      alignSelf: "flex-start",
     },
     progressBadgeText: {
       color: "#FFFFFF",
       fontSize: 14,
-      fontWeight: "800",
+      fontWeight: "900",
     },
     progressTrack: {
       height: 10,
       borderRadius: theme.radius.pill,
-      backgroundColor: "rgba(255,255,255,0.25)",
+      backgroundColor: "rgba(255,255,255,0.22)",
       overflow: "hidden",
     },
     progressFill: {
@@ -477,41 +692,15 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       borderRadius: theme.radius.pill,
       backgroundColor: "#FFFFFF",
     },
-    completeProfileFooter: {
+    completionFooter: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
     },
-    completeProfileLink: {
+    completionLink: {
       color: "#FFFFFF",
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "900",
-    },
-    statsRow: {
-      flexDirection: "row",
-      gap: 12,
-      maxWidth: isWideWeb ? 760 : undefined,
-    },
-    statCard: {
-      flex: 1,
-      minHeight: 96,
-      borderRadius: theme.radius.lg,
-      backgroundColor: activeTheme.surfaceElevated,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.md,
-      justifyContent: "space-between",
-    },
-    statValue: {
-      color: activeTheme.text,
-      fontSize: 18,
-      fontWeight: "800",
-    },
-    statLabel: {
-      color: activeTheme.textMuted,
-      fontSize: 13,
-      lineHeight: 18,
-      fontWeight: "600",
     },
     sectionHeader: {
       flexDirection: "row",
@@ -519,29 +708,179 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       alignItems: "flex-end",
       gap: 12,
     },
-    cardTitle: {
+    sectionTitle: {
       color: activeTheme.text,
-      fontSize: 22,
-      lineHeight: 28,
-      fontWeight: "800",
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: "900",
     },
-    cardText: {
+    sectionBody: {
       color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 23,
+      fontSize: 14,
+      lineHeight: 21,
+      marginTop: 4,
+      maxWidth: isWideWeb ? 560 : undefined,
+    },
+    commandGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+    commandCard: {
+      width: isWideWeb ? "31.8%" : "100%",
+      minHeight: 152,
+      borderRadius: 28,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: 10,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 0.45,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 3,
+    },
+    commandIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.safeSurface,
+    },
+    commandTitle: {
+      color: activeTheme.text,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    commandBody: {
+      color: activeTheme.textMuted,
+      fontSize: 13,
+      lineHeight: 20,
+      fontWeight: "700",
+    },
+    discoveryBoard: {
+      borderRadius: 34,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: theme.spacing.lg,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 0.42,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 3,
+    },
+    discoveryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    discoveryKicker: {
+      color: activeTheme.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    discoveryTitle: {
+      color: activeTheme.text,
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: "900",
+      marginTop: 4,
+    },
+    discoveryButton: {
+      minHeight: 40,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 14,
+      backgroundColor: activeTheme.primaryDark,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    discoveryButtonText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "900",
+    },
+    discoveryAreaRow: {
+      flexDirection: isWideWeb ? "row" : "column",
+      gap: 12,
+    },
+    discoveryAreaCard: {
+      flex: 1,
+      borderRadius: 24,
+      backgroundColor: activeTheme.surfaceElevated,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.md,
+      gap: 6,
+    },
+    discoveryAreaLabel: {
+      color: activeTheme.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+      textTransform: "uppercase",
+    },
+    discoveryAreaValue: {
+      color: activeTheme.text,
+      fontSize: 19,
+      fontWeight: "900",
+    },
+    discoveryAreaBody: {
+      color: activeTheme.textMuted,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: "700",
+    },
+    categoryWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    categoryChip: {
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      backgroundColor: activeTheme.safeSurface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    categoryChipText: {
+      color: activeTheme.text,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    sampleMealRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    sampleMealPill: {
+      borderRadius: theme.radius.pill,
+      backgroundColor: activeTheme.warmSurface,
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+    },
+    sampleMealText: {
+      color: activeTheme.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
     },
     serviceRow: {
       gap: 14,
       paddingRight: 6,
     },
     serviceCard: {
-      width: isWideWeb ? 320 : 248,
-      height: isWideWeb ? 260 : 220,
-      borderRadius: 30,
+      width: isWideWeb ? 334 : 280,
+      height: isWideWeb ? 270 : 236,
+      borderRadius: 34,
       overflow: "hidden",
-      backgroundColor: activeTheme.primaryDark,
       padding: theme.spacing.lg,
       justifyContent: "space-between",
+      backgroundColor: activeTheme.primaryDark,
       shadowColor: activeTheme.shadow,
       shadowOpacity: 1,
       shadowRadius: 16,
@@ -549,33 +888,39 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       elevation: 4,
     },
     serviceImage: { ...StyleSheet.absoluteFillObject },
-    serviceShade: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.42)",
-    },
-    serviceIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+    serviceShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+    serviceBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: "rgba(255,255,255,0.18)",
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
     },
-    serviceCopy: { gap: 8 },
-    serviceTitle: { color: "#FFFFFF", fontSize: 24, lineHeight: 29, fontWeight: "900" },
-    serviceBody: { color: "rgba(255,255,255,0.84)", fontSize: 13, lineHeight: 20, fontWeight: "700" },
+    serviceCopy: {
+      gap: 8,
+    },
+    serviceTitle: {
+      color: "#FFFFFF",
+      fontSize: 27,
+      lineHeight: 33,
+      fontWeight: "900",
+    },
+    serviceBody: {
+      color: "rgba(255,255,255,0.84)",
+      fontSize: 13,
+      lineHeight: 20,
+      fontWeight: "700",
+    },
     marketplacePanel: {
-      borderRadius: 32,
+      borderRadius: 34,
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
       gap: theme.spacing.lg,
-      shadowColor: activeTheme.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 3,
     },
     marketplaceHeader: {
       flexDirection: "row",
@@ -587,21 +932,25 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       minHeight: 42,
       borderRadius: theme.radius.pill,
       paddingHorizontal: 14,
-      backgroundColor: activeTheme.primary,
+      backgroundColor: activeTheme.primaryDark,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 7,
     },
-    marketplaceButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+    marketplaceButtonText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "900",
+    },
     toolGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 12,
     },
     toolCard: {
-      width: isWideWeb ? "31%" : "100%",
-      minHeight: 132,
+      width: isWideWeb ? "31.8%" : "100%",
+      minHeight: 138,
       borderRadius: 24,
       backgroundColor: activeTheme.surfaceElevated,
       borderWidth: 1,
@@ -610,102 +959,73 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       gap: 8,
     },
     toolIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       backgroundColor: activeTheme.safeSurface,
       alignItems: "center",
       justifyContent: "center",
     },
-    toolTitle: { color: activeTheme.text, fontSize: 16, fontWeight: "900" },
-    toolBody: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 19, fontWeight: "700" },
-    availabilityCard: {
+    toolTitle: {
+      color: activeTheme.text,
+      fontSize: 16,
+      fontWeight: "900",
+    },
+    toolBody: {
+      color: activeTheme.textMuted,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: "700",
+    },
+    roadmapCard: {
+      borderRadius: 34,
       backgroundColor: activeTheme.safeSurface,
-      borderRadius: theme.radius.lg,
       borderWidth: 1,
       borderColor: activeTheme.border,
       padding: theme.spacing.lg,
-      gap: theme.spacing.md,
+      gap: theme.spacing.lg,
     },
-    availabilityTop: {
-      flexDirection: isWideWeb ? "row" : "column",
-      justifyContent: "space-between",
-      gap: 16,
+    roadmapList: {
+      gap: 14,
     },
-    availabilityPill: {
-      alignSelf: "flex-start",
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.primary,
-    },
-    availabilityText: {
-      color: "#FFFFFF",
-      fontSize: 13,
-      fontWeight: "800",
-    },
-    categoryRow: {
+    roadmapItem: {
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginTop: 4,
+      alignItems: "flex-start",
+      gap: 12,
     },
-    categoryChip: {
-      borderRadius: theme.radius.pill,
+    roadmapIndex: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: activeTheme.surface,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      backgroundColor: activeTheme.surface,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 2,
     },
-    categoryChipActive: {
+    roadmapIndexDone: {
       backgroundColor: activeTheme.primaryDark,
       borderColor: activeTheme.primaryDark,
     },
-    categoryChipText: {
+    roadmapIndexText: {
       color: activeTheme.text,
       fontSize: 12,
-      fontWeight: "800",
+      fontWeight: "900",
     },
-    categoryChipTextActive: {
-      color: "#FFFFFF",
+    roadmapCopy: {
+      flex: 1,
+      gap: 4,
     },
-    suggestionRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    suggestionPill: {
-      borderRadius: theme.radius.pill,
-      backgroundColor: activeTheme.surfaceElevated,
-      paddingHorizontal: 11,
-      paddingVertical: 8,
-    },
-    suggestionPillText: {
-      color: activeTheme.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-    },
-    stack: {
-      gap: theme.spacing.md,
-    },
-    sectionCard: {
-      backgroundColor: activeTheme.surface,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.lg,
-      gap: theme.spacing.sm,
-    },
-    sectionTitle: {
+    roadmapTitle: {
       color: activeTheme.text,
-      fontSize: 19,
-      fontWeight: "800",
+      fontSize: 16,
+      fontWeight: "900",
     },
-    sectionBody: {
+    roadmapBody: {
       color: activeTheme.textMuted,
-      fontSize: 15,
-      lineHeight: 23,
+      fontSize: 13,
+      lineHeight: 20,
     },
     actionRow: {
       flexDirection: "row",
@@ -713,7 +1033,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     secondaryButton: {
       flex: 1,
-      minHeight: 54,
+      minHeight: 56,
       borderRadius: theme.radius.md,
       borderWidth: 1,
       borderColor: activeTheme.border,
@@ -724,19 +1044,19 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     secondaryButtonText: {
       color: activeTheme.text,
       fontSize: 15,
-      fontWeight: "700",
+      fontWeight: "800",
     },
     primaryButton: {
       flex: 1,
-      minHeight: 54,
+      minHeight: 56,
       borderRadius: theme.radius.md,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: activeTheme.primary,
+      backgroundColor: activeTheme.primaryDark,
     },
     primaryButtonText: {
       color: "#FFFFFF",
       fontSize: 15,
-      fontWeight: "800",
+      fontWeight: "900",
     },
   });

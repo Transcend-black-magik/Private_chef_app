@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { addDoc, collection, getFirestore, serverTimestamp } from "firebase/firestore";
 
 import { fetchUserRecordByEmail, fetchUserRecordById, syncUserRecordToFirebase } from "@/lib/firebase-data";
-import { firebaseAuth, waitForFirebaseAuthReady } from "@/lib/firebase";
+import { firebaseApp, firebaseAuth, waitForFirebaseAuthReady } from "@/lib/firebase";
 
 export type UserRole = "explorer" | "cook";
 export type AuthProvider = "email" | "google" | "apple";
@@ -32,6 +33,12 @@ export type UserSession = {
   profileComplete: boolean;
 };
 
+export type ActiveDeviceSession = {
+  id: string;
+  issuedAt: string;
+  label: string;
+};
+
 export type StoredUser = UserSession & {
   password?: string;
   phoneCountryCode?: string;
@@ -52,6 +59,7 @@ export type StoredUser = UserSession & {
   stripeOnboardingComplete?: boolean;
   activeSessionId?: string;
   activeSessionIssuedAt?: string;
+  activeSessions?: ActiveDeviceSession[];
   countryCode?: string;
   countryName?: string;
   addressLine1?: string;
@@ -76,6 +84,38 @@ export type StoredUser = UserSession & {
 
 const ONBOARDING_KEY = "cook-for-me:onboarding-seen";
 const ACTIVE_SESSION_KEY = "cook-for-me:active-session-id";
+export const MAX_ACTIVE_DEVICE_SESSIONS = 3;
+export const DEVICE_LIMIT_MESSAGE =
+  "This account is already signed in on 3 devices. Log out on one previous device before signing in here. If you no longer have that device, reset your password or use the account recovery sign-out link when it is available, then try again.";
+
+async function createAccountActivityNotification(params: {
+  recipientId: string;
+  title: string;
+  body: string;
+}) {
+  const firestore = firebaseApp ? getFirestore(firebaseApp) : null;
+
+  if (!firestore || !params.recipientId.trim()) {
+    return;
+  }
+
+  try {
+    await addDoc(collection(firestore, "notifications"), {
+      recipientId: params.recipientId,
+      actorId: params.recipientId,
+      actorName: "Cook for Me",
+      type: "account_activity",
+      title: params.title,
+      body: params.body,
+      bookingId: "",
+      threadId: "",
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch {
+    // Account activity alerts should not block session updates.
+  }
+}
 
 export async function markOnboardingSeen() {
   await AsyncStorage.setItem(ONBOARDING_KEY, "true");
@@ -90,17 +130,59 @@ function createSessionId() {
 }
 
 export async function registerSingleDeviceSession(user: StoredUser) {
-  const activeSessionId = createSessionId();
+  const issuedAt = new Date().toISOString();
+  const existingSessions = sanitizeActiveDeviceSessions(user.activeSessions, user);
+  const localSessionId = await AsyncStorage.getItem(ACTIVE_SESSION_KEY);
+  const localSessionStillAllowed = Boolean(
+    localSessionId && existingSessions.some((session) => session.id === localSessionId),
+  );
+  const activeSessionId = localSessionStillAllowed ? localSessionId! : createSessionId();
+
+  if (!localSessionStillAllowed && existingSessions.length >= MAX_ACTIVE_DEVICE_SESSIONS) {
+    await createAccountActivityNotification({
+      recipientId: user.id,
+      title: "New device sign-in blocked",
+      body: "A new device tried to sign in, but this account already has 3 active devices.",
+    });
+    throw new Error(DEVICE_LIMIT_MESSAGE);
+  }
+
   await AsyncStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+
+  const activeSessions = localSessionStillAllowed
+    ? existingSessions.map((session) =>
+        session.id === activeSessionId ? { ...session, issuedAt } : session,
+      )
+    : [
+        ...existingSessions,
+        {
+          id: activeSessionId,
+          issuedAt,
+          label: "Signed-in device",
+        },
+      ];
 
   const nextUser: StoredUser = {
     ...user,
     activeSessionId,
-    activeSessionIssuedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    activeSessionIssuedAt: issuedAt,
+    activeSessions,
+    updatedAt: issuedAt,
   };
 
   await saveUserRecord(nextUser);
+
+  if (!localSessionStillAllowed) {
+    await createAccountActivityNotification({
+      recipientId: nextUser.id,
+      title: "New device signed in",
+      body:
+        existingSessions.length > 0
+          ? "A new device signed in to your account. Review your active devices if this was not you."
+          : "Your account is now active on this device.",
+    });
+  }
+
   return nextUser;
 }
 
@@ -109,6 +191,34 @@ export async function getLocalActiveSessionId() {
 }
 
 export async function clearSession() {
+  const localSessionId = await AsyncStorage.getItem(ACTIVE_SESSION_KEY);
+
+  if (localSessionId) {
+    const currentUser = await getCurrentUserRecord();
+
+    if (currentUser?.activeSessions?.length) {
+      try {
+        await saveUserRecord({
+          ...currentUser,
+          activeSessionId: currentUser.activeSessionId === localSessionId ? undefined : currentUser.activeSessionId,
+          activeSessionIssuedAt:
+            currentUser.activeSessionId === localSessionId ? undefined : currentUser.activeSessionIssuedAt,
+          activeSessions: currentUser.activeSessions.filter((session) => session.id !== localSessionId),
+          updatedAt: new Date().toISOString(),
+        });
+        await createAccountActivityNotification({
+          recipientId: currentUser.id,
+          title: "Device signed out",
+          body: "One of your signed-in devices logged out of your account.",
+        });
+      } catch {
+        // Local sign-out should still complete if the remote session cleanup cannot be saved.
+      }
+    }
+  }
+
+  await AsyncStorage.removeItem(ACTIVE_SESSION_KEY);
+
   if (!firebaseAuth) {
     return;
   }
@@ -320,6 +430,7 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
       typeof nextUser.activeSessionId === "string" ? nextUser.activeSessionId : undefined,
     activeSessionIssuedAt:
       typeof nextUser.activeSessionIssuedAt === "string" ? nextUser.activeSessionIssuedAt : undefined,
+    activeSessions: sanitizeActiveDeviceSessions(nextUser.activeSessions, nextUser),
     countryCode: typeof nextUser.countryCode === "string" ? nextUser.countryCode : undefined,
     countryName: typeof nextUser.countryName === "string" ? nextUser.countryName : undefined,
     addressLine1: typeof nextUser.addressLine1 === "string" ? nextUser.addressLine1 : undefined,
@@ -360,6 +471,50 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
         ? nextUser.updatedAt
         : new Date().toISOString(),
   };
+}
+
+function sanitizeActiveDeviceSessions(raw: unknown, user?: Partial<StoredUser>): ActiveDeviceSession[] {
+  const sessions = Array.isArray(raw)
+    ? raw
+        .map((item): ActiveDeviceSession | null => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+
+          const nextSession = item as Partial<ActiveDeviceSession>;
+          const id = typeof nextSession.id === "string" ? nextSession.id.trim() : "";
+
+          if (!id) {
+            return null;
+          }
+
+          return {
+            id,
+            issuedAt:
+              typeof nextSession.issuedAt === "string" && nextSession.issuedAt
+                ? nextSession.issuedAt
+                : new Date().toISOString(),
+            label:
+              typeof nextSession.label === "string" && nextSession.label.trim()
+                ? nextSession.label.trim()
+                : "Signed-in device",
+          };
+        })
+        .filter((item): item is ActiveDeviceSession => Boolean(item))
+    : [];
+
+  if (!Array.isArray(raw) && !sessions.length && typeof user?.activeSessionId === "string" && user.activeSessionId.trim()) {
+    sessions.push({
+      id: user.activeSessionId.trim(),
+      issuedAt:
+        typeof user.activeSessionIssuedAt === "string" && user.activeSessionIssuedAt
+          ? user.activeSessionIssuedAt
+          : new Date().toISOString(),
+      label: "Signed-in device",
+    });
+  }
+
+  return sessions.slice(0, MAX_ACTIVE_DEVICE_SESSIONS);
 }
 
 function sanitizeCookVerification(raw: unknown): CookVerification | null {

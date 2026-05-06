@@ -231,6 +231,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {role !== "cook" ? (
       <View style={styles.companionCard}>
         <View style={styles.companionImageWrap}>
           <Image source={heroFoodImages.salad} style={styles.companionImage} contentFit="cover" />
@@ -259,6 +260,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
+      ) : null}
 
       <Pressable
         style={styles.logoutButton}
@@ -657,30 +659,29 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       backgroundColor: "#FFFFFF",
     },
     actionGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
       gap: 10,
     },
     tileAction: {
-      width: isWideWeb ? "48%" : "100%",
-      minHeight: 118,
-      borderRadius: 24,
-      backgroundColor: activeTheme.surfaceElevated,
+      minHeight: 66,
+      borderRadius: 22,
+      backgroundColor: activeTheme.bg,
       borderWidth: 1,
       borderColor: activeTheme.border,
-      padding: theme.spacing.md,
-      justifyContent: "space-between",
-      gap: 10,
+      paddingHorizontal: theme.spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
     },
     tileIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 16,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: activeTheme.safeSurface,
     },
     tileText: {
+      flex: 1,
       color: activeTheme.text,
       fontSize: 15,
       lineHeight: 20,

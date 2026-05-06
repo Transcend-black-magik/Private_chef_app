@@ -20,20 +20,20 @@ export const lightTheme = {
 };
 
 export const darkTheme = {
-  bg: "#10140F",
-  surface: "#1B211A",
-  surfaceElevated: "#252B23",
-  warmSurface: "#2E3324",
-  safeSurface: "#23301E",
-  focusSurface: "#1D2A28",
+  bg: "#0E1116",
+  surface: "#171C24",
+  surfaceElevated: "#202733",
+  warmSurface: "#26211C",
+  safeSurface: "#1B232C",
+  focusSurface: "#182129",
   primary: "#AFCB8F",
   primaryDark: "#AFCB8F",
   accent: "#AFCB8F",
-  accentSoft: "#3A2818",
+  accentSoft: "#2B1F18",
   secondaryAccent: "#FF6D7E",
   text: "#FFF9EA",
   textMuted: "#C8C0AE",
-  border: "#343C31",
+  border: "#2B3442",
   danger: "#FF7E6B",
   shadow: "rgba(0, 0, 0, 0.24)",
 };

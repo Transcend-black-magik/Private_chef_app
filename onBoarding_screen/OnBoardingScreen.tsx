@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Image,
@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { UserRole } from "@/lib/app-state";
+import { type UserRole } from "@/lib/app-state";
 import { heroFoodImages } from "@/lib/food-visuals";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -48,15 +48,15 @@ export default function OnBoardingScreen({
   const sliderTravel = Math.max(240, Math.min(width - theme.spacing.lg * 2 - 16, 360));
   const knobMaxOffset = sliderTravel - SLIDER_KNOB_SIZE - SLIDER_HORIZONTAL_PADDING * 2;
 
-  const resetSlider = () => {
+  const resetSlider = useCallback(() => {
     Animated.spring(sliderX, {
       toValue: 0,
       useNativeDriver: true,
       bounciness: 6,
     }).start();
-  };
+  }, [sliderX]);
 
-  const completeSlide = () => {
+  const completeSlide = useCallback(() => {
     Animated.timing(sliderX, {
       toValue: knobMaxOffset,
       duration: 140,
@@ -88,7 +88,7 @@ export default function OnBoardingScreen({
         sliderX.setValue(0);
       });
     });
-  };
+  }, [choicesOpacity, choicesTranslateX, introOpacity, introTranslateX, knobMaxOffset, sliderX]);
 
   const panResponder = useMemo(
     () =>
@@ -109,8 +109,8 @@ export default function OnBoardingScreen({
         },
         onPanResponderTerminate: resetSlider,
       }),
-    [knobMaxOffset],
-  ); 
+    [completeSlide, knobMaxOffset, resetSlider, sliderX],
+  );
 
   return (
     <View style={styles.container}>
@@ -478,3 +478,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isShortScreen: b
 function colorSchemeOpacity(backgroundColor: string) {
   return backgroundColor === "#121713" ? 0.22 : 0.9;
 }
+
+
+// lets do this:  Background push to the phone itself would be the next layer. i mean i need to see notifications if i am on another app or this app is not open and the notification thing should work for explorer and cooks too. on booking page when i click any of the button on the list and i click confirm on the opened modal, forcefully close modal befpre showing the loading screen. i need this AI to be more faster with responses so as not to keep users waiting for long. also use my logo on the chat instead of that leaf thing. also let the chat automatically scroll when a new chat is added. also i notice the chat does not save memory, please fix that. also the chat tab unread/read counts does not update properly. the on in the container updates well but the chat tab icon does not. i also found out that it is until the other user sends a message before the "read" color changes which is not suppose to be so, it suppose to change immidiately the other user opens the thread/chat.

@@ -19,7 +19,7 @@ export type AppNotificationRecord = {
   recipientId: string;
   actorId: string;
   actorName: string;
-  type: "booking_request" | "booking_update" | "chat_message";
+  type: "booking_request" | "booking_update" | "chat_message" | "account_activity";
   title: string;
   body: string;
   bookingId: string;

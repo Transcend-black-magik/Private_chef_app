@@ -27,6 +27,7 @@ type PersistedUserRecord = {
   stripeOnboardingComplete?: boolean;
   activeSessionId?: string;
   activeSessionIssuedAt?: string;
+  activeSessions?: StoredUser["activeSessions"];
   role: StoredUser["role"];
   provider: StoredUser["provider"];
   profileComplete: boolean;
@@ -115,6 +116,7 @@ function toPersistedUserRecord(user: StoredUser): PersistedUserRecord {
     stripeOnboardingComplete: user.stripeOnboardingComplete,
     activeSessionId: user.activeSessionId,
     activeSessionIssuedAt: user.activeSessionIssuedAt,
+    activeSessions: user.activeSessions,
     role: user.role,
     provider: user.provider,
     profileComplete: user.profileComplete,

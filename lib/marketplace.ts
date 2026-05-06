@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -15,6 +16,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   getAccountIdentifiers,
@@ -31,7 +33,6 @@ import { getAsyncErrorMessage, withTimeout } from "@/lib/async-guard";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
 import { firebaseApp } from "@/lib/firebase";
 import type { MealItem } from "@/lib/meal-data";
-import { isAnyAccountIdentifierOnline } from "@/lib/presence";
 
 export const EXPLORER_FEE_RATE = 0.1;
 export const COOK_FEE_RATE = 0.1;
@@ -132,6 +133,8 @@ export type ChatMessageRecord = {
 };
 
 let cachedThreadsForCurrentUser: ChatThreadRecord[] = [];
+const THREAD_CACHE_KEY_PREFIX = "cook-for-me:chat-threads:";
+const MESSAGE_CACHE_KEY_PREFIX = "cook-for-me:chat-messages:";
 
 function getFirestoreInstance() {
   return firebaseApp ? getFirestore(firebaseApp) : null;
@@ -434,13 +437,134 @@ function sortThreads(records: ChatThreadRecord[]) {
   return records.sort((left, right) => (right.lastMessageAt || "").localeCompare(left.lastMessageAt || ""));
 }
 
-function cacheThreads(records: ChatThreadRecord[]) {
+function buildThreadCacheKey(user: Pick<StoredUser, "id" | "email">) {
+  return `${THREAD_CACHE_KEY_PREFIX}${getAccountIdentifiers(user).join("__")}`;
+}
+
+async function persistThreadCache(
+  user: Pick<StoredUser, "id" | "email"> | null | undefined,
+  records: ChatThreadRecord[],
+) {
+  if (!user) {
+    return;
+  }
+
+  try {
+    await AsyncStorage.setItem(buildThreadCacheKey(user), JSON.stringify(records));
+  } catch {
+    // Local chat cache should not block live thread updates.
+  }
+}
+
+async function readThreadCache(user: Pick<StoredUser, "id" | "email"> | null | undefined) {
+  if (!user) {
+    return [] as ChatThreadRecord[];
+  }
+
+  try {
+    const raw = await AsyncStorage.getItem(buildThreadCacheKey(user));
+
+    if (!raw) {
+      return [] as ChatThreadRecord[];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed
+          .map((item, index) =>
+            item && typeof item === "object"
+              ? mapThreadRecord(String((item as { id?: unknown }).id || `cached-${index}`), item as Record<string, unknown>)
+              : null,
+          )
+          .filter((item): item is ChatThreadRecord => Boolean(item))
+      : [];
+  } catch {
+    return [] as ChatThreadRecord[];
+  }
+}
+
+async function persistMessageCache(threadId: string, messages: ChatMessageRecord[]) {
+  if (!threadId.trim()) {
+    return;
+  }
+
+  try {
+    await AsyncStorage.setItem(`${MESSAGE_CACHE_KEY_PREFIX}${threadId}`, JSON.stringify(messages));
+  } catch {
+    // Message cache should not block live chat usage.
+  }
+}
+
+async function readMessageCache(threadId: string) {
+  if (!threadId.trim()) {
+    return [] as ChatMessageRecord[];
+  }
+
+  try {
+    const raw = await AsyncStorage.getItem(`${MESSAGE_CACHE_KEY_PREFIX}${threadId}`);
+
+    if (!raw) {
+      return [] as ChatMessageRecord[];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed
+          .map((item, index) =>
+            item && typeof item === "object"
+              ? mapMessageRecord(String((item as { id?: unknown }).id || `cached-message-${index}`), item as Record<string, unknown>)
+              : null,
+          )
+          .filter((item): item is ChatMessageRecord => Boolean(item))
+      : [];
+  } catch {
+    return [] as ChatMessageRecord[];
+  }
+}
+
+function cacheThreads(
+  records: ChatThreadRecord[],
+  currentUser?: Pick<StoredUser, "id" | "email"> | null,
+) {
   cachedThreadsForCurrentUser = records;
+  void persistThreadCache(currentUser, records);
   return records;
 }
 
 export function getCachedThreadsForCurrentUser() {
   return cachedThreadsForCurrentUser;
+}
+
+function normalizeVisibleThreads(
+  records: ChatThreadRecord[],
+  currentUser: Pick<StoredUser, "id" | "email">,
+) {
+  return cacheThreads(
+    sortThreads(
+      records.filter((thread) => {
+        const visibility = threadVisibilityState(thread, currentUser);
+        return !visibility.hidden && !visibility.archived;
+      }),
+    ),
+    currentUser,
+  );
+}
+
+function buildThreadQueries(
+  firestore: NonNullable<ReturnType<typeof getFirestoreInstance>>,
+  identifiers: string[],
+) {
+  const queryIdentifiers = identifiers.slice(0, 10);
+
+  return [
+    query(
+      collection(firestore, "chatThreads"),
+      where("participantIds", "array-contains-any", queryIdentifiers),
+      limit(50),
+    ),
+    query(collection(firestore, "chatThreads"), where("explorerId", "in", queryIdentifiers), limit(50)),
+    query(collection(firestore, "chatThreads"), where("cookId", "in", queryIdentifiers), limit(50)),
+  ];
 }
 
 function updateCachedThreadAfterMessage(params: {
@@ -468,6 +592,12 @@ function updateCachedThreadAfterMessage(params: {
       nextThread,
       ...cachedThreadsForCurrentUser.filter((item) => item.id !== params.thread.id),
     ]),
+    params.thread.explorerId === params.senderIdentifier || params.thread.cookId === params.senderIdentifier
+      ? {
+          id: params.senderIdentifier,
+          email: params.senderIdentifier.includes("@") ? params.senderIdentifier : "",
+        }
+      : null,
   );
 }
 
@@ -547,8 +677,7 @@ async function postThreadMessage(params: {
   });
 
   const recipientId = recipientIdentifiers[0];
-  const recipientOnline = await isAnyAccountIdentifierOnline(recipientIdentifiers);
-  if (recipientId && !recipientOnline) {
+  if (recipientId) {
     await createNotification({
       recipientId,
       actorId: senderIdentifier,
@@ -907,27 +1036,22 @@ export async function fetchThreadsForCurrentUser() {
   }
 
   try {
-    const snapshot = await withTimeout(
-      getDocs(
-        query(
-          collection(firestore, "chatThreads"),
-          where("participantIds", "array-contains-any", identifiers),
-          limit(50),
-        ),
-      ),
+    const snapshots = await withTimeout(
+      Promise.all(buildThreadQueries(firestore, identifiers).map((threadQuery) => getDocs(threadQuery))),
       { timeoutMessage: "Loading chats is taking too long. Please try again." },
     );
 
-    return cacheThreads(sortThreads(
-      snapshot.docs
-        .map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>))
-        .filter((thread) => {
-          const visibility = threadVisibilityState(thread, currentUser);
-          return !visibility.hidden && !visibility.archived;
-        }),
-    ));
+    const mergedThreads = new Map<string, ChatThreadRecord>();
+    snapshots.forEach((snapshot) => {
+      snapshot.docs.forEach((item) => {
+        mergedThreads.set(item.id, mapThreadRecord(item.id, item.data() as Record<string, unknown>));
+      });
+    });
+
+    return normalizeVisibleThreads([...mergedThreads.values()], currentUser);
   } catch {
-    return [] as ChatThreadRecord[];
+    const cached = await readThreadCache(currentUser);
+    return cached.length ? normalizeVisibleThreads(cached, currentUser) : ([] as ChatThreadRecord[]);
   }
 }
 
@@ -954,26 +1078,38 @@ export function subscribeToThreadsForCurrentUser(
       return;
     }
 
-    unsubscribe = onSnapshot(
-      query(
-        collection(firestore, "chatThreads"),
-        where("participantIds", "array-contains-any", identifiers),
-        limit(50),
+    void readThreadCache(currentUser).then((cached) => {
+      if (cached.length && !cachedThreadsForCurrentUser.length) {
+        callback(normalizeVisibleThreads(cached, currentUser));
+      }
+    });
+
+    const snapshotsBySource = new Map<number, ChatThreadRecord[]>();
+    const unsubscribers = buildThreadQueries(firestore, identifiers).map((threadQuery, index) =>
+      onSnapshot(
+        threadQuery,
+        (snapshot) => {
+          snapshotsBySource.set(
+            index,
+            snapshot.docs.map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>)),
+          );
+
+          const mergedThreads = new Map<string, ChatThreadRecord>();
+          snapshotsBySource.forEach((records) => {
+            records.forEach((thread) => {
+              mergedThreads.set(thread.id, thread);
+            });
+          });
+
+          callback(normalizeVisibleThreads([...mergedThreads.values()], currentUser));
+        },
+        (error) => onError?.(error),
       ),
-      (snapshot) => {
-        callback(
-          cacheThreads(sortThreads(
-            snapshot.docs
-              .map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>))
-              .filter((thread) => {
-                const visibility = threadVisibilityState(thread, currentUser);
-                return !visibility.hidden && !visibility.archived;
-              }),
-          )),
-        );
-      },
-      (error) => onError?.(error),
     );
+
+    unsubscribe = () => {
+      unsubscribers.forEach((stop) => stop());
+    };
   });
 
   return () => unsubscribe();
@@ -989,9 +1125,11 @@ export async function fetchMessagesForThread(threadId: string) {
     const snapshot = await getDocs(
       query(collection(firestore, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
     );
-    return snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
+    const messages = snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
+    await persistMessageCache(threadId, messages);
+    return messages;
   } catch {
-    return [] as ChatMessageRecord[];
+    return readMessageCache(threadId);
   }
 }
 
@@ -1006,10 +1144,18 @@ export function subscribeToMessagesForThread(
     return () => undefined;
   }
 
+  void readMessageCache(threadId).then((cached) => {
+    if (cached.length) {
+      callback(cached);
+    }
+  });
+
   return onSnapshot(
     query(collection(firestore, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
     (snapshot) => {
-      callback(snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>)));
+      const messages = snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
+      void persistMessageCache(threadId, messages);
+      callback(messages);
     },
     (error) => onError?.(error),
   );
@@ -1262,6 +1408,25 @@ export async function cancelBookingAsExplorer(bookingId: string) {
   });
 }
 
+export async function deleteArchivedBookingForCurrentUser(bookingId: string) {
+  const currentUser = await getCurrentUserRecord();
+  if (!currentUser) {
+    throw new Error("You need to be signed in before deleting this booking.");
+  }
+
+  const { firestore, booking } = await getBookingOrThrow(bookingId);
+  const canDelete =
+    (matchesAccountIdentifier(booking.explorerId, currentUser) ||
+      matchesAccountIdentifier(booking.cookId, currentUser)) &&
+    (booking.status === "cancelled" || booking.status === "declined");
+
+  if (!canDelete) {
+    throw new Error("Only archived cancelled or declined bookings can be deleted.");
+  }
+
+  await deleteDoc(doc(firestore, "bookingRequests", bookingId));
+}
+
 export async function rescheduleBookingAsExplorer(bookingId: string, nextServiceDateLabel: string, note: string) {
   const currentUser = await getCurrentUserRecord();
   if (!currentUser) {
@@ -1289,6 +1454,17 @@ export async function rescheduleBookingAsExplorer(bookingId: string, nextService
       ? `The explorer requested a new service time: ${trimmedDate}. Note: ${note.trim()}`
       : `The explorer requested a new service time: ${trimmedDate}.`,
     bookingStatus: "pending_cook",
+  });
+
+  await createNotification({
+    recipientId: booking.cookId,
+    actorId: currentUser.id,
+    actorName: currentUser.name,
+    type: "booking_update",
+    title: "Reschedule request",
+    body: `${currentUser.name} requested a new service time for this booking.`,
+    bookingId: booking.id,
+    threadId: booking.threadId,
   });
 }
 
@@ -1396,6 +1572,17 @@ export async function completeBookingAsCook(bookingId: string, note: string) {
       : "Cook marked the service as done and is waiting for trust/release.",
     bookingStatus: "completed",
     isBlocked: true,
+  });
+
+  await createNotification({
+    recipientId: booking.explorerId,
+    actorId: currentUser.id,
+    actorName: currentUser.name,
+    type: "booking_update",
+    title: "Booking marked complete",
+    body: `${currentUser.name} marked this booking as completed.`,
+    bookingId: booking.id,
+    threadId: booking.threadId,
   });
 }
 
@@ -1546,6 +1733,17 @@ export async function acceptCounterOfferAsExplorer(bookingId: string) {
     sender: currentUser,
     body: `Explorer accepted the updated offer of ${booking.latestOfferAmount}.`,
     bookingStatus: nextStatus,
+  });
+
+  await createNotification({
+    recipientId: booking.cookId,
+    actorId: currentUser.id,
+    actorName: currentUser.name,
+    type: "booking_update",
+    title: "Counter offer accepted",
+    body: `${currentUser.name} accepted the updated price for this booking.`,
+    bookingId: booking.id,
+    threadId: booking.threadId,
   });
 }
 

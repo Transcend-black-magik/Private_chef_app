@@ -86,10 +86,26 @@ export default function RecipeDetailScreen() {
           </View>
         </View>
 
-        <Pressable style={styles.watchButton} onPress={() => router.push("/recipes" as never)}>
-          <Ionicons name="play-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.watchButtonText}>Watch Videos</Text>
-        </Pressable>
+        <View style={styles.actionStack}>
+          {recipe.mealItemId ? (
+            <Pressable
+              style={styles.checkoutButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/meal-item",
+                  params: { id: recipe.mealItemId, source: "recipe_recommendation" },
+                } as never)
+              }
+            >
+              <Ionicons name="card-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.checkoutButtonText}>Find cooks and checkout</Text>
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.watchButton} onPress={() => router.push("/recipes" as never)}>
+            <Ionicons name="play-circle" size={18} color={activeTheme.primaryDark} />
+            <Text style={styles.watchButtonText}>More recipes</Text>
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );
@@ -199,8 +215,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     ingredientName: { flex: 1, color: activeTheme.text, fontSize: 14, fontWeight: "800" },
     ingredientAmount: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "700" },
-    watchButton: {
-      alignSelf: "center",
+    actionStack: { gap: 10 },
+    checkoutButton: {
       minHeight: 52,
       borderRadius: theme.radius.pill,
       paddingHorizontal: 24,
@@ -210,5 +226,18 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       gap: 8,
       backgroundColor: activeTheme.primary,
     },
-    watchButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+    checkoutButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+    watchButton: {
+      minHeight: 52,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: activeTheme.safeSurface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    watchButtonText: { color: activeTheme.primaryDark, fontSize: 14, fontWeight: "900" },
   });

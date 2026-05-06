@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import RoundedAvatar from "@/components/RoundedAvatar";
 import { matchesAccountIdentifier } from "@/lib/account-identity";
 import {
@@ -208,11 +209,7 @@ export default function ChatThreadScreen() {
   }
 
   if (thread === undefined) {
-    return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>Loading conversation...</Text>
-      </View>
-    );
+    return <LogoLoadingScreen title="Loading conversation" subtitle="Opening your thread and syncing the latest messages." />;
   }
 
   if (!thread) {

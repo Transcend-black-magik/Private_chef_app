@@ -15,19 +15,21 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
-import { fetchCookDirectory, sortCooks, type CookDirectoryRecord } from "@/lib/cook-data";
+import { fetchCookDirectory, getCookById, sortCooks, type CookDirectoryRecord } from "@/lib/cook-data";
 import { getCookImage } from "@/lib/food-visuals";
 import { getCurrentUserRecord, type StoredUser } from "@/lib/app-state";
 import { getMealItemById } from "@/lib/meal-data";
 import { createInstantMealBookingRequest, type BookingRecord } from "@/lib/marketplace";
+import { isMealSaved, toggleSavedMeal } from "@/lib/saved-items";
 import { getTheme, theme } from "@/theme/theme";
 
 export default function MealItemScreen() {
-  const params = useLocalSearchParams<{ id?: string; category?: string; source?: string }>();
+  const params = useLocalSearchParams<{ id?: string; category?: string; source?: string; cookId?: string }>();
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
   const styles = createStyles(activeTheme);
   const [cooks, setCooks] = useState<CookDirectoryRecord[]>([]);
+  const [profileCook, setProfileCook] = useState<CookDirectoryRecord | null>(null);
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [hasMatched, setHasMatched] = useState(false);
@@ -70,13 +72,21 @@ export default function MealItemScreen() {
 
   useEffect(() => {
     async function loadMatches() {
-      const [directory, user] = await Promise.all([fetchCookDirectory(), getCurrentUserRecord()]);
+      const [directory, user, cookFromProfile] = await Promise.all([
+        fetchCookDirectory(),
+        getCurrentUserRecord(),
+        params.cookId ? getCookById(params.cookId) : Promise.resolve(null),
+      ]);
       setCooks(directory);
       setCurrentUser(user);
+      setProfileCook(cookFromProfile);
+      if (params.id) {
+        setSavedDish(await isMealSaved(params.id));
+      }
     }
 
     void loadMatches();
-  }, []);
+  }, [params.cookId, params.id]);
 
   const matchedCooks = useMemo(() => {
     if (!item) {
@@ -106,6 +116,11 @@ export default function MealItemScreen() {
 
     return sortCooks(scored, "popular");
   }, [cooks, currentUser, item]);
+  const selectedCook = useMemo(
+    () => cooks.find((cook) => cook.id === params.cookId) || profileCook,
+    [cooks, params.cookId, profileCook],
+  );
+  const isDirectCookOrder = Boolean(params.cookId);
 
   function runMatch() {
     setIsMatching(true);
@@ -154,6 +169,15 @@ export default function MealItemScreen() {
     }
   }
 
+  async function handleToggleSavedDish() {
+    if (!item) {
+      return;
+    }
+
+    const nextSaved = await toggleSavedMeal(item.id);
+    setSavedDish(nextSaved.includes(item.id));
+  }
+
   if (!item) {
     return (
       <View style={styles.emptyScreen}>
@@ -179,7 +203,7 @@ export default function MealItemScreen() {
         <View style={styles.heroShade} />
         <View style={styles.topBar}>
           <View />
-          <Pressable style={styles.iconButton} onPress={() => setSavedDish((value) => !value)}>
+          <Pressable style={styles.iconButton} onPress={() => void handleToggleSavedDish()}>
             <Ionicons name={savedDish ? "heart" : "heart-outline"} size={19} color={savedDish ? "#FF6B6B" : "#171713"} />
           </Pressable>
         </View>
@@ -221,31 +245,14 @@ export default function MealItemScreen() {
 
       <Pressable
         style={styles.primaryButton}
-        onPress={runMatch}
+        onPress={() => selectedCook ? void selectCook(selectedCook) : runMatch()}
       >
         <Text style={styles.primaryButtonText}>
-          Find available cooks
+          {isDirectCookOrder ? "Order now" : "Find available cooks"}
         </Text>
       </Pressable>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <Modal visible={isMatching} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.matchLoadingCard}>
-            <View style={styles.matchOrb}>
-              <Ionicons name="sparkles" size={28} color="#FFFFFF" />
-            </View>
-            <Text style={styles.matchLoadingTitle}>Finding your best cooks</Text>
-            <Text style={styles.matchLoadingBody}>
-              Checking dish fit, service area, distance, trust signals, and who can handle this soon.
-            </Text>
-            <View style={styles.matchProgressTrack}>
-              <View style={styles.matchProgressFill} />
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={hasMatched && showMatchesSheet} transparent animationType="slide">
         <View style={styles.sheetBackdrop}>
@@ -315,6 +322,12 @@ export default function MealItemScreen() {
         <AuthProcessingScreen
           title="Preparing checkout"
           subtitle="We're creating your confirmed chef match and opening the secure test Paystack checkout."
+        />
+      ) : null}
+      {isMatching ? (
+        <AuthProcessingScreen
+          title="Finding your best cooks"
+          subtitle="Checking dish fit, service area, distance, trust signals, and who can handle this soon."
         />
       ) : null}
       </ScrollView>

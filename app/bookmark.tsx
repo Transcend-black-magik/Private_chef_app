@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { type CookDirectoryRecord } from "@/lib/cook-data";
 import { getCookImage, heroFoodImages } from "@/lib/food-visuals";
 import { fetchSavedCooks } from "@/lib/saved-cooks";
@@ -43,6 +44,10 @@ export default function BookmarkScreen() {
 
     void loadSaved();
   }, []);
+
+  if (isLoading) {
+    return <LogoLoadingScreen title="Loading bookmarks" subtitle="Gathering your saved recipes, cook profiles, and recent picks." />;
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
@@ -94,9 +99,7 @@ export default function BookmarkScreen() {
           <Text style={styles.sectionTitle}>Saved cooks</Text>
           <Text style={styles.seeAll}>{savedCooks.length}</Text>
         </View>
-        {isLoading ? (
-          <Text style={styles.emptyText}>Loading saved cooks...</Text>
-        ) : savedCooks.length ? (
+        {savedCooks.length ? (
           <View style={styles.savedGrid}>
             {savedCooks.slice(0, 4).map((cook, index) => (
               <Pressable

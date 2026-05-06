@@ -14,6 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { getCurrentUserRecord, type StoredUser } from "@/lib/app-state";
 import { getVerificationActionCopy, submitCookIdentityVerification } from "@/lib/verification-service";
 import { getTheme, theme } from "@/theme/theme";
@@ -106,11 +107,7 @@ export default function CookVerificationScreen() {
   }
 
   if (!user) {
-    return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>Loading verification...</Text>
-      </View>
-    );
+    return <LogoLoadingScreen title="Loading verification" subtitle="Checking your cook identity status and document flow." />;
   }
 
   const statusCopy = getVerificationActionCopy(user);

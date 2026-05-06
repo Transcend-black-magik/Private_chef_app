@@ -28,6 +28,9 @@ import {
 } from "@/lib/food-visuals";
 import { getProfileCompletion, getProfileCompletionCopy } from "@/lib/profile-completion";
 import { recipeRecommendations } from "@/lib/recipe-data";
+import { getSavedMealIds, toggleSavedMeal } from "@/lib/saved-items";
+import { getSavedCookIds, toggleSavedCook } from "@/lib/saved-cooks";
+import { mealItems } from "@/lib/meal-data";
 import { getTheme, theme } from "@/theme/theme";
 
 const logoLight = require("../../assets/images/logo_light.png");
@@ -58,18 +61,26 @@ export default function ExploreScreen() {
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true);
   const [profilePercent, setProfilePercent] = useState(0);
   const [explorerContext, setExplorerContext] = useState(() => getExplorerContext(null));
-  const [savedDishOfWeek, setSavedDishOfWeek] = useState(false);
+  const [savedDishIds, setSavedDishIds] = useState<string[]>([]);
+  const [savedFeaturedCookIds, setSavedFeaturedCookIds] = useState<string[]>([]);
   const profileCopy = getProfileCompletionCopy("explorer");
 
   useEffect(() => {
     async function loadExploreContext() {
-      const [user, cooks] = await Promise.all([getCurrentUserRecord(), fetchCookDirectory()]);
+      const [user, cooks, savedMeals, savedCooks] = await Promise.all([
+        getCurrentUserRecord(),
+        fetchCookDirectory(),
+        getSavedMealIds(),
+        getSavedCookIds(),
+      ]);
 
       if (user) {
         setProfilePercent(getProfileCompletion(user).percent);
         setExplorerContext(getExplorerContext(user));
       }
 
+      setSavedDishIds(savedMeals);
+      setSavedFeaturedCookIds(savedCooks);
       setDirectory(cooks);
       setIsLoadingDirectory(false);
     }
@@ -97,6 +108,16 @@ export default function ExploreScreen() {
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
+
+  async function handleToggleSavedDish(mealId: string) {
+    const nextSaved = await toggleSavedMeal(mealId);
+    setSavedDishIds(nextSaved);
+  }
+
+  async function handleToggleSavedFeaturedCook(cookId: string) {
+    const nextSaved = await toggleSavedCook(cookId);
+    setSavedFeaturedCookIds(nextSaved);
+  }
 
   return (
     <View style={styles.screen}>
@@ -231,54 +252,57 @@ export default function ExploreScreen() {
 
       <View style={styles.sectionHeader}>
         <View>
-          <Text style={styles.sectionTitle}>Dish of the Week</Text>
+          <Text style={styles.sectionTitle}>Dishes of the Week</Text>
           <Text style={styles.sectionSubtitle}>A fast pick when you want a chef match now.</Text>
         </View>
       </View>
-      <Pressable
-        style={styles.dishWeekCard}
-        onPress={() =>
-          featuredCook
-            ? router.push({ pathname: "/cooks/[id]", params: { id: featuredCook.id, source: "dish_of_week" } } as never)
-            : router.push("/all-cooks" as never)
-        }
+      <Animated.ScrollView
+        horizontal
+        style={styles.edgeCarousel}
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.dishWeekRow}
       >
-        <Pressable
-          style={styles.dishSaveButton}
-          onPress={(event) => {
-            event.stopPropagation();
-            setSavedDishOfWeek((value) => !value);
-          }}
-        >
-          <Ionicons
-            name={savedDishOfWeek ? "heart" : "heart-outline"}
-            size={18}
-            color={savedDishOfWeek ? "#FF6B6B" : "#FFFFFF"}
-          />
-        </Pressable>
-        <View style={styles.dishWeekCopy}>
-          <Text style={styles.dishWeekTitle}>Spicy Ramen Noodle</Text>
-          <Text style={styles.dishWeekMeta}>440 kcal</Text>
-          <Text style={styles.dishWeekLabel}>Ingredients</Text>
-          <View style={styles.dishIngredientRow}>
-            {["fast-food-outline", "egg-outline", "nutrition-outline", "grid-outline"].map((icon) => (
-              <View key={icon} style={styles.dishIngredientIcon}>
-                <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={17} color="#FFFFFF" />
+        {mealItems.slice(4, 8).map((meal) => (
+          <Pressable
+            key={meal.id}
+            style={styles.dishWeekCard}
+            onPress={() =>
+              router.push({ pathname: "/meal-item", params: { id: meal.id, category: meal.category, source: "dish_of_week" } } as never)
+            }
+          >
+            <Image source={meal.image} style={styles.dishWeekImage} contentFit="cover" />
+            <View style={styles.dishWeekShade} />
+            <Pressable
+              style={styles.dishSaveButton}
+              onPress={(event) => {
+                event.stopPropagation();
+                void handleToggleSavedDish(meal.id);
+              }}
+            >
+              <Ionicons
+                name={savedDishIds.includes(meal.id) ? "heart" : "heart-outline"}
+                size={18}
+                color={savedDishIds.includes(meal.id) ? "#FF6B6B" : "#FFFFFF"}
+              />
+            </Pressable>
+            <View style={styles.dishWeekCopy}>
+              <Text numberOfLines={2} style={styles.dishWeekTitle}>{meal.title}</Text>
+              <Text style={styles.dishWeekMeta}>{meal.kcal} kcal</Text>
+              <View style={styles.dishWeekFooter}>
+                <View style={styles.dishOrderButton}>
+                  <Text style={styles.dishOrderText}>Checkout</Text>
+                </View>
+                <View style={styles.dishTime}>
+                  <Ionicons name="time-outline" size={15} color="rgba(255,255,255,0.76)" />
+                  <Text style={styles.dishTimeText}>{meal.minutes} min</Text>
+                </View>
               </View>
-            ))}
-          </View>
-          <View style={styles.dishWeekFooter}>
-            <View style={styles.dishOrderButton}>
-              <Text style={styles.dishOrderText}>Order chef</Text>
             </View>
-            <View style={styles.dishTime}>
-              <Ionicons name="time-outline" size={15} color="rgba(255,255,255,0.62)" />
-              <Text style={styles.dishTimeText}>14 min</Text>
-            </View>
-          </View>
-        </View>
-        <Image source={heroFoodImages.platter} style={styles.dishWeekImage} contentFit="cover" />
-      </Pressable>
+          </Pressable>
+        ))}
+      </Animated.ScrollView>
 
       <View style={styles.sectionHeader}>
         <View>
@@ -312,9 +336,21 @@ export default function ExploreScreen() {
                 <Ionicons name="star" size={14} color="#FFCA45" />
                 <Text style={styles.ratingText}>4.{9 - (index % 3)}</Text>
               </View>
-              <View style={styles.heartButton}>
-                <Ionicons name="heart-outline" size={19} color="#FFFFFF" />
-              </View>
+              <Pressable
+                style={styles.heartButton}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  if (cook.id !== "preview") {
+                    void handleToggleSavedFeaturedCook(cook.id);
+                  }
+                }}
+              >
+                <Ionicons
+                  name={savedFeaturedCookIds.includes(cook.id) ? "heart" : "heart-outline"}
+                  size={19}
+                  color={savedFeaturedCookIds.includes(cook.id) ? "#FF6B6B" : "#FFFFFF"}
+                />
+              </Pressable>
             </View>
             <View style={styles.featureBottom}>
               <Text style={styles.featureEyebrow}>{index === 0 ? "Tonight's strong match" : "Trusted profile"}</Text>
@@ -790,7 +826,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       padding: theme.spacing.lg,
       justifyContent: "space-between",
     },
-    featureRow: { gap: 14, paddingHorizontal: 0 },
+    featureRow: { gap: 14, paddingHorizontal: theme.spacing.lg },
     featureImage: { ...StyleSheet.absoluteFillObject },
     featureShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
     featureTop: {
@@ -843,7 +879,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     featureMetaText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
     recommendationRow: {
       gap: 12,
-      paddingHorizontal: 0,
+      paddingHorizontal: theme.spacing.lg,
     },
     edgeCarousel: {
       marginHorizontal: isWideWeb ? 0 : -theme.spacing.lg,
@@ -918,15 +954,15 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
     },
     moodText: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
     dishWeekCard: {
-      minHeight: 210,
+      width: isWideWeb ? 300 : 244,
+      height: isWideWeb ? 250 : 210,
       borderRadius: 30,
       overflow: "hidden",
       backgroundColor: "#20201D",
       padding: theme.spacing.lg,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
+      justifyContent: "flex-end",
     },
+    dishWeekRow: { gap: 14, paddingHorizontal: theme.spacing.lg },
     dishSaveButton: {
       position: "absolute",
       top: 14,
@@ -942,14 +978,13 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       borderColor: "rgba(255,255,255,0.18)",
     },
     dishWeekCopy: {
-      flex: 1,
       gap: 8,
       zIndex: 1,
     },
     dishWeekTitle: {
       color: "#FFFFFF",
-      fontSize: 25,
-      lineHeight: 30,
+      fontSize: 23,
+      lineHeight: 28,
       fontWeight: "900",
     },
     dishWeekMeta: {
@@ -1005,11 +1040,13 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       fontWeight: "800",
     },
     dishWeekImage: {
-      width: isWideWeb ? 230 : 138,
-      height: isWideWeb ? 190 : 138,
-      borderRadius: 69,
+      ...StyleSheet.absoluteFillObject,
     },
-    cookRow: { gap: 14, paddingHorizontal: 0 },
+    dishWeekShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.42)",
+    },
+    cookRow: { gap: 14, paddingHorizontal: theme.spacing.lg },
     cookCard: {
       width: isWideWeb ? 260 : 214,
       borderRadius: 30,
