@@ -72,7 +72,7 @@ export const recipeRecommendations: RecipeRecord[] = [
   {
     id: "jollof-rice-bowl",
     title: "Jollof Rice Bowl",
-    author: "Cook for Me Kitchen",
+    author: "Private Chef Kitchen",
     image: heroFoodImages.jollof,
     rating: "4.8",
     time: "45 mins",
@@ -90,7 +90,7 @@ export const recipeRecommendations: RecipeRecord[] = [
   {
     id: "classic-pizza",
     title: "Classic Pizza",
-    author: "Cook for Me Kitchen",
+    author: "Private Chef Kitchen",
     image: heroFoodImages.pizza,
     rating: "4.7",
     time: "35 mins",
@@ -108,7 +108,7 @@ export const recipeRecommendations: RecipeRecord[] = [
   {
     id: "smash-burger",
     title: "Smash Burger",
-    author: "Cook for Me Kitchen",
+    author: "Private Chef Kitchen",
     image: heroFoodImages.burger,
     rating: "4.6",
     time: "25 mins",
@@ -126,7 +126,7 @@ export const recipeRecommendations: RecipeRecord[] = [
   {
     id: "seared-steak",
     title: "Seared Steak",
-    author: "Cook for Me Kitchen",
+    author: "Private Chef Kitchen",
     image: heroFoodImages.platter,
     rating: "4.9",
     time: "30 mins",

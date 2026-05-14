@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const HIDDEN_ARCHIVED_BOOKINGS_KEY = "cook-for-me:hidden-archived-bookings";
+const HIDDEN_ARCHIVED_BOOKINGS_KEY = "private-chef:hidden-archived-bookings";
 
 export async function getHiddenArchivedBookingIds() {
   try {

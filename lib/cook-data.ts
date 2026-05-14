@@ -1,8 +1,7 @@
-import { collection, getDocs, getFirestore, limit, query, where } from "firebase/firestore";
+import { collection, getDocs, getSupabaseStore, limit, query, where } from "@/lib/supabase-store";
 
 import type { StoredUser } from "@/lib/app-state";
 import { getUserById } from "@/lib/app-state";
-import { firebaseApp } from "@/lib/firebase";
 
 export type CookDirectoryRecord = {
   id: string;
@@ -26,6 +25,8 @@ export type CookDirectoryRecord = {
   responseLabel: string;
   tags: string[];
   trustBadges: string[];
+  ratingAverage: number;
+  ratingCount: number;
   user: StoredUser;
 };
 
@@ -104,6 +105,7 @@ export function getCookProfilePercent(user: StoredUser) {
     user.yearsExperience,
     user.serviceAreaLabel,
     user.serviceRadiusMiles,
+    user.nutritionServices,
     user.emergencyContactName,
     user.emergencyContactPhone,
     user.safetyPractices,
@@ -134,6 +136,7 @@ export function mapUserToCookDirectoryRecord(user: StoredUser): CookDirectoryRec
     normalizeText(user.role === "cook" ? "Home cooking" : ""),
     normalizeText(user.specialtiesText) ? "Paid recipes" : "",
     normalizeText(user.dietaryPreferences) || normalizeText(user.gymGoal) ? "Nutritionist" : "",
+    normalizeText(user.nutritionCredentials) || normalizeText(user.nutritionServices) ? "Nutrition support" : "",
     ...(user.availableMealCategories || []),
   ]).slice(0, 10);
   const trustBadges = buildTrustBadges(user);
@@ -155,7 +158,7 @@ export function mapUserToCookDirectoryRecord(user: StoredUser): CookDirectoryRec
     serviceRadiusMiles: normalizeText(user.serviceRadiusMiles) || "Flexible",
     note:
       normalizeText(user.safetyPractices) ||
-      "Profile includes home service details, identity review status, and direct contact information.",
+      "Profile includes home service details, platform trust status, and direct contact information.",
     bio:
       normalizeText(user.bio) ||
       "This cook has started building a trusted profile and can add more detail as bookings grow.",
@@ -166,20 +169,22 @@ export function mapUserToCookDirectoryRecord(user: StoredUser): CookDirectoryRec
     responseLabel: verified ? "Priority trust profile" : "Growing profile",
     tags,
     trustBadges,
+    ratingAverage: Number(user.ratingAverage || 0),
+    ratingCount: Number(user.ratingCount || 0),
     user,
   };
 }
 
 export async function fetchCookDirectory() {
-  if (!firebaseApp) {
+  const store = getSupabaseStore();
+  if (!store) {
     return [] as CookDirectoryRecord[];
   }
 
   try {
-    const firestore = getFirestore(firebaseApp);
     const snapshot = await getDocs(
       query(
-        collection(firestore, "users"),
+        collection(store, "users"),
         where("role", "==", "cook"),
         where("profileComplete", "==", true),
         limit(40),
@@ -235,6 +240,8 @@ export function filterCooks({
       cook.bio,
       cook.priceHint,
       cook.user.dietaryPreferences,
+      cook.user.nutritionCredentials,
+      cook.user.nutritionServices,
       cook.user.gymGoal,
       cook.user.portionPreference,
       cook.user.safetyPractices,

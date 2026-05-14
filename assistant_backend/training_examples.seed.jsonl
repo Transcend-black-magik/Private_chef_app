@@ -1,0 +1,5 @@
+{"messages":[{"role":"user","content":"I want to book a chef for dinner Friday"}],"expected":{"routeIntent":"booking","actions":[{"label":"Start booking","route":"/booking-request","type":"start_booking"}]}}
+{"messages":[{"role":"user","content":"show me my upcoming bookings"}],"expected":{"routeIntent":"bookings","actions":[{"label":"View bookings","route":"/bookings","type":"navigate"}]}}
+{"messages":[{"role":"user","content":"I need a high protein meal after gym"}],"expected":{"routeIntent":"gym","actions":[{"label":"Gym meals","route":"/gym","type":"navigate"},{"label":"Meal match","route":"/meal-match","type":"navigate"}]}}
+{"messages":[{"role":"user","content":"open my messages with cooks"}],"expected":{"routeIntent":"chats","actions":[{"label":"Open chats","route":"/chats","type":"navigate"}]}}
+{"messages":[{"role":"user","content":"what can I cook with chicken and rice"}],"expected":{"routeIntent":"recipes","actions":[{"label":"Browse recipes","route":"/recipes","type":"navigate"},{"label":"Search meals","route":"/search","type":"search"}]}}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import { Image } from "expo-image";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { getCurrentUserRecord, type StoredUser } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { getVerificationActionCopy, submitCookIdentityVerification } from "@/lib/verification-service";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -89,6 +91,7 @@ export default function CookVerificationScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setIsSubmitting(true);
     setError("");
 
@@ -100,7 +103,7 @@ export default function CookVerificationScreen() {
 
       setUser(nextUser);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Identity verification failed.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "Identity verification failed."));
     } finally {
       setIsSubmitting(false);
     }
@@ -145,9 +148,9 @@ export default function CookVerificationScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>1. Upload your ID</Text>
+          <Text style={styles.sectionTitle}>1. Add profile document</Text>
           <Text style={styles.sectionBody}>
-            Submit a clear image of your government ID. This is used for the trust review on your cook profile.
+            Add a document or profile proof image for your cook trust record. Government ID matching is disabled for now.
           </Text>
           <Pressable
             style={[styles.imagePickerCard, statusCopy.locked && styles.imagePickerCardDisabled]}
@@ -157,15 +160,15 @@ export default function CookVerificationScreen() {
             {documentUri ? (
               <Image source={documentUri} style={styles.previewImage} contentFit="cover" />
             ) : (
-              <Text style={styles.imagePickerText}>Choose ID image</Text>
+              <Text style={styles.imagePickerText}>Choose document image</Text>
             )}
           </Pressable>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>2. Upload a selfie</Text>
+          <Text style={styles.sectionTitle}>2. Add a selfie</Text>
           <Text style={styles.sectionBody}>
-            This is matched against the face on your ID so explorers can trust that the person cooking is really you.
+            This keeps a trust signal attached to your cook profile until a compliant verification provider is added.
           </Text>
           <Pressable
             style={[styles.imagePickerCard, statusCopy.locked && styles.imagePickerCardDisabled]}
@@ -188,15 +191,15 @@ export default function CookVerificationScreen() {
           disabled={statusCopy.locked}
         >
           <Text style={styles.primaryButtonText}>
-            {status === "verified" ? "Verification locked" : status === "pending_review" ? "Under review" : "Start verification"}
+            {status === "verified" ? "Verification locked" : status === "pending_review" ? "Under review" : "Verify profile"}
           </Text>
         </Pressable>
       </ScrollView>
 
       {isSubmitting ? (
         <AuthProcessingScreen
-          title="Running identity verification"
-          subtitle="We are matching your selfie with your ID and saving the result to your cook profile."
+          title="Verifying cook profile"
+          subtitle="We are saving your platform trust status to your cook profile."
         />
       ) : null}
     </KeyboardAvoidingView>

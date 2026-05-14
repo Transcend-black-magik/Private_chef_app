@@ -1,18 +1,17 @@
 import {
   collection,
   doc,
-  getFirestore,
+  getSupabaseStore,
   limit,
   onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
-} from "firebase/firestore";
+} from "@/lib/supabase-store";
 
 import { getAccountIdentifiers } from "@/lib/account-identity";
 import { getCurrentUserRecord } from "@/lib/app-state";
-import { firebaseApp } from "@/lib/firebase";
 
 export type AppNotificationRecord = {
   id: string;
@@ -28,8 +27,8 @@ export type AppNotificationRecord = {
   createdAt?: string;
 };
 
-function getFirestoreInstance() {
-  return firebaseApp ? getFirestore(firebaseApp) : null;
+function getSupabaseStoreInstance() {
+  return getSupabaseStore();
 }
 
 function timestampToIsoString(value: unknown) {
@@ -64,8 +63,8 @@ export function subscribeToNotificationsForCurrentUser(
   callback: (notifications: AppNotificationRecord[]) => void,
   onError?: (error: Error) => void,
 ) {
-  const firestore = getFirestoreInstance();
-  if (!firestore) {
+  const store = getSupabaseStoreInstance();
+  if (!store) {
     callback([]);
     return () => undefined;
   }
@@ -82,17 +81,17 @@ export function subscribeToNotificationsForCurrentUser(
 
     unsubscribe = onSnapshot(
       query(
-        collection(firestore, "notifications"),
+        collection(store, "notifications"),
         where("recipientId", "in", identifiers),
         limit(80),
       ),
       (snapshot) =>
         callback(
           snapshot.docs
-            .map((item) =>
+            .map((item: { id: string; data: () => unknown }) =>
               mapNotification(item.id, item.data() as Record<string, unknown>),
             )
-            .sort((left, right) => (right.createdAt || "").localeCompare(left.createdAt || "")),
+            .sort((left: AppNotificationRecord, right: AppNotificationRecord) => (right.createdAt || "").localeCompare(left.createdAt || "")),
         ),
       (error) => onError?.(error),
     );
@@ -102,12 +101,12 @@ export function subscribeToNotificationsForCurrentUser(
 }
 
 export async function markNotificationRead(notificationId: string) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !notificationId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !notificationId.trim()) {
     return;
   }
 
-  await updateDoc(doc(firestore, "notifications", notificationId), {
+  await updateDoc(doc(store, "notifications", notificationId), {
     read: true,
     readAt: serverTimestamp(),
   });

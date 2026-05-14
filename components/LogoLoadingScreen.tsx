@@ -4,7 +4,7 @@ import { Animated, Image, Keyboard, Modal, StyleSheet, Text, useColorScheme, Vie
 import { getTheme, theme } from "@/theme/theme";
 
 type LogoLoadingScreenProps = {
-  title: string;
+  title?: string;
   subtitle?: string;
   overlay?: boolean;
 };
@@ -74,8 +74,8 @@ export default function LogoLoadingScreen({ title, subtitle, overlay = false }: 
           <Image source={logoSource} resizeMode="contain" style={styles.logo} />
         </Animated.View>
       </View>
-      <Text style={[styles.title, { color: activeTheme.text }]}>{title}</Text>
-      {subtitle ? <Text style={[styles.subtitle, { color: activeTheme.textMuted }]}>{subtitle}</Text> : null}
+      {title ? <Text style={[styles.title, { color: activeTheme.text }]}>{title}</Text> : null}
+      {title && subtitle ? <Text style={[styles.subtitle, { color: activeTheme.textMuted }]}>{subtitle}</Text> : null}
     </View>
   );
 

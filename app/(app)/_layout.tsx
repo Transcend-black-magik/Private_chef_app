@@ -125,6 +125,13 @@ export default function AppTabsLayout() {
   const isCook = session.role === "cook";
   const sharedChatOptions = {
     title: "Chats",
+    tabBarBadge: chatBadgeCount,
+    tabBarBadgeStyle: {
+      backgroundColor: activeTheme.secondaryAccent,
+      color: "#FFFFFF",
+      fontSize: 10,
+      fontWeight: "900" as const,
+    },
   } as const;
   const tabsScreenOptions = ({ route }: { route: { name: string } }) => ({
     headerShown: false,
@@ -163,26 +170,6 @@ export default function AppTabsLayout() {
         }}
       >
         <Ionicons name={getTabIcon(route.name)} size={size ?? 22} color={focused ? "#FFFFFF" : color} />
-        {route.name === "chats" && chatBadgeCount ? (
-          <View
-            style={{
-              position: "absolute",
-              top: -7,
-              right: -5,
-              minWidth: 18,
-              height: 18,
-              borderRadius: 9,
-              alignItems: "center",
-              justifyContent: "center",
-              paddingHorizontal: 5,
-              backgroundColor: activeTheme.secondaryAccent,
-            }}
-          >
-            <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "900" }}>
-              {chatBadgeCount}
-            </Text>
-          </View>
-        ) : null}
       </View>
     ),
   });
@@ -249,7 +236,7 @@ function WebNav({
           <Ionicons name="restaurant" size={18} color="#FFFFFF" />
         </View>
         <View>
-          <Text style={[styles.brandText, { color: activeTheme.text }]}>Cook For Me</Text>
+          <Text style={[styles.brandText, { color: activeTheme.text }]}>Private Chef</Text>
           <Text style={[styles.brandSubtext, { color: activeTheme.textMuted }]}>Kitchen companion</Text>
         </View>
       </Pressable>

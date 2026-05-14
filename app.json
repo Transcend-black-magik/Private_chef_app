@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "cook_for_me",
-    "slug": "cook_for_me",
+    "name": "Private Chef",
+    "slug": "private-chef",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "cookforme",
+    "scheme": "privatechef",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tega.privatechef"
     },
     "android": {
+      "package": "com.tega.privatechef",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F7EFE7",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -27,6 +29,10 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
+      "expo-notifications",
+      "expo-apple-authentication",
+      "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",
         {

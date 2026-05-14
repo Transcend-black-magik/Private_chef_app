@@ -13,7 +13,7 @@ const recipeAccessOptions = [
   {
     title: "Free app recipe",
     meta: "Free",
-    body: "Quick steps and core ingredients from Cook for Me.",
+    body: "Quick steps and core ingredients from Private Chef.",
     cta: "Browse free recipes",
     icon: "book-outline",
     tone: "free",

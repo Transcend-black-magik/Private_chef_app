@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,8 +7,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import RoundedAvatar from "@/components/RoundedAvatar";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { getCookImage } from "@/lib/food-visuals";
 import { mealItems, type MealItem } from "@/lib/meal-data";
+import { fetchRatingsForTarget, submitCookRating, type RatingRecord } from "@/lib/ratings";
 import { isCookSaved, toggleSavedCook } from "@/lib/saved-cooks";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -46,16 +48,23 @@ export default function CookDetailScreen() {
   const [cook, setCook] = useState<CookDirectoryRecord | null | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [ratings, setRatings] = useState<RatingRecord[]>([]);
+  const [ratingValue, setRatingValue] = useState(5);
+  const [ratingBody, setRatingBody] = useState("");
+  const [ratingError, setRatingError] = useState("");
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   useEffect(() => {
     async function loadCook() {
-      const [nextCook, nextSaved] = await Promise.all([
+      const [nextCook, nextSaved, nextRatings] = await Promise.all([
         getCookById(params.id ?? ""),
         params.id ? isCookSaved(params.id) : Promise.resolve(false),
+        params.id ? fetchRatingsForTarget("cook", params.id) : Promise.resolve([]),
       ]);
 
       setCook(nextCook);
       setIsSaved(nextSaved);
+      setRatings(nextRatings);
     }
 
     void loadCook();
@@ -79,6 +88,34 @@ export default function CookDetailScreen() {
     return <LogoLoadingScreen title="Loading chef profile" subtitle="Bringing in this cook's story, meals, and availability." />;
   }
 
+  async function handleSubmitRating() {
+    if (!cook || isSubmittingRating) {
+      return;
+    }
+
+    setIsSubmittingRating(true);
+    setRatingError("");
+
+    try {
+      const aggregate = await submitCookRating({
+        cookId: cook.id,
+        rating: ratingValue,
+        body: ratingBody,
+      });
+      const [nextCook, nextRatings] = await Promise.all([
+        getCookById(cook.id),
+        fetchRatingsForTarget("cook", cook.id),
+      ]);
+      setCook(nextCook ? { ...nextCook, ...aggregate } : { ...cook, ...aggregate });
+      setRatings(nextRatings);
+      setRatingBody("");
+    } catch (error) {
+      setRatingError(toSafeUserErrorMessage(error instanceof Error ? error.message : "", "We could not save that rating."));
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  }
+
   if (!cook) {
     return (
       <View style={styles.emptyScreen}>
@@ -90,6 +127,9 @@ export default function CookDetailScreen() {
     );
   }
   const cookMeals = getCookMeals(cook);
+  const ratingAverage = Number(cook.ratingAverage || 0);
+  const ratingCount = Number(cook.ratingCount || 0);
+  const ratingLabel = ratingCount > 0 ? ratingAverage.toFixed(1) : "New";
 
   return (
     <View style={styles.screen}>
@@ -150,8 +190,8 @@ export default function CookDetailScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Ionicons name="star" size={15} color="#FFAA26" />
-              <Text style={styles.statStrong}>4.7</Text>
-              <Text style={styles.statMuted}>(311 reviews)</Text>
+              <Text style={styles.statStrong}>{ratingLabel}</Text>
+              <Text style={styles.statMuted}>({ratingCount} reviews)</Text>
             </View>
             <View style={styles.addButton}>
               <Ionicons name="add" size={19} color="#FF9B31" />
@@ -207,29 +247,89 @@ export default function CookDetailScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={activeTheme.textMuted} />
           </Pressable>
+          {cook.user.nutritionServices || cook.user.nutritionCredentials ? (
+            <View style={styles.nutritionCard}>
+              <View style={styles.specialOrderIcon}>
+                <Ionicons name="nutrition-outline" size={18} color={activeTheme.primaryDark} />
+              </View>
+              <View style={styles.specialOrderCopy}>
+                <Text style={styles.specialOrderTitle}>Nutrition support</Text>
+                {cook.user.nutritionCredentials ? (
+                  <Text style={styles.specialOrderBody}>{cook.user.nutritionCredentials}</Text>
+                ) : null}
+                {cook.user.nutritionServices ? (
+                  <Text style={styles.specialOrderBody}>{cook.user.nutritionServices}</Text>
+                ) : null}
+                {cook.user.nutritionDisclaimer ? (
+                  <Text style={styles.nutritionDisclaimer}>{cook.user.nutritionDisclaimer}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.reviewsHeader}>
           <Text style={styles.reviewsTitle}>Reviews</Text>
-          <Text style={styles.viewAllText}>View all</Text>
+          <Text style={styles.viewAllText}>{ratingCount ? `${ratingAverage.toFixed(1)} average` : "First impressions"}</Text>
         </View>
 
-        <View style={styles.reviewCard}>
-          <View style={styles.reviewTop}>
-            <RoundedAvatar name="Devon Lane" size={48} backgroundColor="#F0B49B" />
-            <View style={styles.reviewCopy}>
-              <Text style={styles.reviewName}>Devon Lane</Text>
-              <Text style={styles.reviewDate}>May 24, 2020</Text>
-            </View>
-            <View style={styles.reviewRating}>
-              <Ionicons name="star" size={13} color="#FFAA26" />
-              <Text style={styles.reviewRatingText}>4.7</Text>
-            </View>
+        <View style={styles.ratingFormCard}>
+          <Text style={styles.ratingFormTitle}>Rate {cook.name.split(" ")[0]}</Text>
+          <View style={styles.starPicker}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Pressable key={value} onPress={() => setRatingValue(value)}>
+                <Ionicons
+                  name={value <= ratingValue ? "star" : "star-outline"}
+                  size={28}
+                  color="#FFAA26"
+                />
+              </Pressable>
+            ))}
           </View>
-          <Text style={styles.reviewBody}>
-            {cook.name.split(" ")[0]} is the best chef I have ever seen. The service was quick, calm, and delicious for everyone.
-          </Text>
+          <TextInput
+            value={ratingBody}
+            onChangeText={setRatingBody}
+            placeholder="Share what other explorers should know"
+            placeholderTextColor={activeTheme.textMuted}
+            multiline
+            style={styles.ratingInput}
+          />
+          {ratingError ? <Text style={styles.ratingError}>{ratingError}</Text> : null}
+          <Pressable
+            style={[styles.ratingSubmitButton, isSubmittingRating && styles.ratingSubmitButtonDisabled]}
+            disabled={isSubmittingRating}
+            onPress={() => void handleSubmitRating()}
+          >
+            <Text style={styles.ratingSubmitText}>{isSubmittingRating ? "Saving..." : "Submit rating"}</Text>
+          </Pressable>
         </View>
+
+        {ratings.length ? (
+          ratings.map((rating) => (
+            <View key={rating.id} style={styles.reviewCard}>
+              <View style={styles.reviewTop}>
+                <RoundedAvatar name={rating.reviewerName} size={48} backgroundColor="#F0B49B" />
+                <View style={styles.reviewCopy}>
+                  <Text style={styles.reviewName}>{rating.reviewerName}</Text>
+                  <Text style={styles.reviewDate}>
+                    {rating.createdAt ? new Date(rating.createdAt).toLocaleDateString() : "Recent"}
+                  </Text>
+                </View>
+                <View style={styles.reviewRating}>
+                  <Ionicons name="star" size={13} color="#FFAA26" />
+                  <Text style={styles.reviewRatingText}>{rating.rating.toFixed(1)}</Text>
+                </View>
+              </View>
+              <Text style={styles.reviewBody}>
+                {rating.body || "Rated this cook after a Private Chef experience."}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <View style={styles.reviewCard}>
+            <Text style={styles.reviewBody}>No reviews yet. Book or rate this cook after an experience.</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -368,6 +468,18 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     specialOrderCopy: { flex: 1, gap: 3 },
     specialOrderTitle: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
     specialOrderBody: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 17, fontWeight: "700" },
+    nutritionCard: {
+      minHeight: 92,
+      borderRadius: 22,
+      backgroundColor: activeTheme.surface,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    nutritionDisclaimer: { color: activeTheme.textMuted, fontSize: 11, lineHeight: 16, fontWeight: "700", fontStyle: "italic" },
     reviewsTitle: { color: activeTheme.text, fontSize: 19, fontWeight: "900" },
     viewAllText: { color: "#FFAD5B", fontSize: 13, fontWeight: "800" },
     reviewCard: {
@@ -394,6 +506,38 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     reviewRatingText: { color: "#FF9B31", fontSize: 13, fontWeight: "900" },
     reviewBody: { color: activeTheme.text, fontSize: 13, lineHeight: 20 },
+    ratingFormCard: {
+      marginHorizontal: theme.spacing.lg,
+      borderRadius: 24,
+      backgroundColor: activeTheme.safeSurface,
+      padding: theme.spacing.lg,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    ratingFormTitle: { color: activeTheme.text, fontSize: 16, fontWeight: "900" },
+    starPicker: { flexDirection: "row", gap: 7 },
+    ratingInput: {
+      minHeight: 92,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      backgroundColor: activeTheme.surface,
+      color: activeTheme.text,
+      padding: theme.spacing.md,
+      fontSize: 14,
+      textAlignVertical: "top",
+    },
+    ratingError: { color: activeTheme.danger, fontSize: 12, lineHeight: 18, fontWeight: "700" },
+    ratingSubmitButton: {
+      minHeight: 44,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.primaryDark,
+    },
+    ratingSubmitButtonDisabled: { opacity: 0.55 },
+    ratingSubmitText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
     emptyScreen: {
       flex: 1,
       alignItems: "center",

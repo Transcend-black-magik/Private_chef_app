@@ -47,7 +47,7 @@ export function buildSeedCookUsers(count = 100): StoredUser[] {
       id: `seed-cook-${index + 1}`,
       name,
       phone: `+1555000${String(index + 1).padStart(4, "0")}`,
-      email: `seed.cook.${index + 1}@cookforme.local`,
+      email: `seed.cook.${index + 1}@privatechef.local`,
       role: "cook",
       provider: "email",
       profileComplete: true,

@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 
-import { fetchBookingsForCurrentUser, type BookingRecord } from "@/lib/marketplace";
+import { subscribeToBookingsForCurrentUser, type BookingRecord } from "@/lib/marketplace";
 import { getTheme, theme } from "@/theme/theme";
 
 function coordinateFromText(value?: string) {
@@ -29,12 +29,11 @@ export default function LiveServiceScreen() {
   };
 
   useEffect(() => {
-    async function loadBooking() {
-      const bookings = await fetchBookingsForCurrentUser();
+    const unsubscribe = subscribeToBookingsForCurrentUser((bookings) => {
       setBooking(bookings.find((item) => item.id === params.bookingId) || null);
-    }
+    });
 
-    void loadBooking();
+    return () => unsubscribe();
   }, [params.bookingId]);
 
   return (

@@ -37,7 +37,6 @@ export default function AuthProfileScreen() {
   const [addressLine1, setAddressLine1] = useState("");
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
-  const [documentNumber, setDocumentNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(true);
   const [error, setError] = useState("");
@@ -50,8 +49,7 @@ export default function AuthProfileScreen() {
       phoneNumber.trim() &&
       addressLine1.trim() &&
       city.trim() &&
-      region.trim() &&
-      (isCook ? documentNumber.trim() : true),
+      region.trim(),
   );
 
   useEffect(() => {
@@ -119,7 +117,7 @@ export default function AuthProfileScreen() {
       addressLine1,
       city,
       region,
-      documentNumber,
+      documentNumber: isCook ? "AUTO-VERIFIED" : "",
       documentType: documentPlaceholder,
     });
 
@@ -223,30 +221,18 @@ export default function AuthProfileScreen() {
           />
 
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>Identity review</Text>
+            <Text style={styles.noticeTitle}>Platform trust</Text>
             <Text style={styles.noticeText}>
               {isCook
-                ? "We'll queue your identity details for review before your cook profile is fully trusted in the app."
-                : "You can finish sign-up now. We'll ask for identity review on your first protected order so cooks and explorers both feel safer."}
+                ? "Your cook profile will receive a platform trust badge after these required details are saved."
+                : "You can finish sign-up now. Explorer trust is based on your completed profile and in-app activity."}
             </Text>
           </View>
 
           {isCook ? (
-            <>
-              <Text style={styles.fieldLabel}>Government ID</Text>
-              <TextInput
-                value={documentNumber}
-                onChangeText={setDocumentNumber}
-                placeholder={documentPlaceholder}
-                placeholderTextColor={activeTheme.textMuted}
-                autoCapitalize="characters"
-                style={styles.input}
-              />
-
-              <Text style={styles.helperText}>
-                Persona, Dojah, or Smile ID can be connected through a secure backend before launch.
-              </Text>
-            </>
+            <Text style={styles.helperText}>
+              Government ID verification is disabled for now. A compliant provider can be added later when the production budget and review process are ready.
+            </Text>
           ) : null}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -265,10 +251,10 @@ export default function AuthProfileScreen() {
 
       {isSubmitting ? (
         <AuthProcessingScreen
-          title={isCook ? "Saving and queuing review" : "Finishing your setup"}
+          title={isCook ? "Saving cook profile" : "Finishing your setup"}
           subtitle={
             isCook
-              ? "We're saving your cook profile details and preparing your verification review."
+              ? "We're saving your cook profile details and applying platform trust."
               : "We're saving your profile and opening your home screen."
           }
         />

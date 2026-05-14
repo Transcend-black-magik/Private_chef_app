@@ -1,4 +1,4 @@
-const admin = require("firebase-admin");
+const { createClient } = require("@supabase/supabase-js");
 const fs = require("fs");
 const path = require("path");
 
@@ -69,7 +69,7 @@ function buildSeedCookUsers(count = 100) {
       id: `seed-cook-${index + 1}`,
       name,
       phone: `+1555000${String(index + 1).padStart(4, "0")}`,
-      email: `seed.cook.${index + 1}@cookforme.local`,
+      email: `seed.cook.${index + 1}@privatechef.local`,
       role: "cook",
       provider: "email",
       profileComplete: true,
@@ -106,32 +106,24 @@ function buildSeedCookUsers(count = 100) {
 async function main() {
   loadDotEnv();
 
-  if (!admin.apps.length) {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    const credential = serviceAccountPath
-      ? admin.credential.cert(require(path.resolve(serviceAccountPath)))
-      : serviceAccountJson
-        ? admin.credential.cert(JSON.parse(serviceAccountJson))
-        : admin.credential.applicationDefault();
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    admin.initializeApp({
-      credential,
-      projectId,
-    });
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before seeding.");
   }
 
-  const db = admin.firestore();
-  const batch = db.batch();
-  const cooks = buildSeedCookUsers(100);
-
-  cooks.forEach((cook) => {
-    batch.set(db.collection("users").doc(cook.id), cook, { merge: true });
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
   });
+  const cooks = buildSeedCookUsers(100);
+  const { error } = await supabase.from("users").upsert(cooks, { onConflict: "id" });
 
-  await batch.commit();
-  console.log(`Seeded ${cooks.length} cook profiles into Firestore users.`);
+  if (error) {
+    throw error;
+  }
+
+  console.log(`Seeded ${cooks.length} cook profiles into Supabase users.`);
 }
 
 main().catch((error) => {

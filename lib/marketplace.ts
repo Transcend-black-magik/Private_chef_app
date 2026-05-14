@@ -5,7 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
-  getFirestore,
+  getSupabaseStore,
   increment,
   limit,
   onSnapshot,
@@ -15,7 +15,7 @@ import {
   setDoc,
   updateDoc,
   where,
-} from "firebase/firestore";
+} from "@/lib/supabase-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
@@ -31,8 +31,8 @@ import {
 } from "@/lib/app-state";
 import { getAsyncErrorMessage, withTimeout } from "@/lib/async-guard";
 import { getCookById, type CookDirectoryRecord } from "@/lib/cook-data";
-import { firebaseApp } from "@/lib/firebase";
 import type { MealItem } from "@/lib/meal-data";
+import { sendPushNotificationViaRelay } from "@/lib/push-relay";
 
 export const EXPLORER_FEE_RATE = 0.1;
 export const COOK_FEE_RATE = 0.1;
@@ -133,11 +133,11 @@ export type ChatMessageRecord = {
 };
 
 let cachedThreadsForCurrentUser: ChatThreadRecord[] = [];
-const THREAD_CACHE_KEY_PREFIX = "cook-for-me:chat-threads:";
-const MESSAGE_CACHE_KEY_PREFIX = "cook-for-me:chat-messages:";
+const THREAD_CACHE_KEY_PREFIX = "private-chef:chat-threads:";
+const MESSAGE_CACHE_KEY_PREFIX = "private-chef:chat-messages:";
 
-function getFirestoreInstance() {
-  return firebaseApp ? getFirestore(firebaseApp) : null;
+function getSupabaseStoreInstance() {
+  return getSupabaseStore();
 }
 
 async function createNotification(params: {
@@ -150,13 +150,13 @@ async function createNotification(params: {
   bookingId?: string;
   threadId?: string;
 }) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !params.recipientId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !params.recipientId.trim()) {
     return;
   }
 
   try {
-    await addDoc(collection(firestore, "notifications"), {
+    const notificationRef = await addDoc(collection(store, "notifications"), {
       recipientId: params.recipientId,
       actorId: params.actorId,
       actorName: params.actorName,
@@ -167,6 +167,15 @@ async function createNotification(params: {
       threadId: params.threadId || "",
       read: false,
       createdAt: serverTimestamp(),
+    });
+    await sendPushNotificationViaRelay({
+      notificationId: notificationRef.id,
+      recipientId: params.recipientId,
+      title: params.title,
+      body: params.body,
+      type: params.type,
+      bookingId: params.bookingId,
+      threadId: params.threadId,
     });
   } catch {
     // Notifications should not block core booking/chat flows.
@@ -551,19 +560,19 @@ function normalizeVisibleThreads(
 }
 
 function buildThreadQueries(
-  firestore: NonNullable<ReturnType<typeof getFirestoreInstance>>,
+  store: NonNullable<ReturnType<typeof getSupabaseStoreInstance>>,
   identifiers: string[],
 ) {
   const queryIdentifiers = identifiers.slice(0, 10);
 
   return [
     query(
-      collection(firestore, "chatThreads"),
+      collection(store, "chatThreads"),
       where("participantIds", "array-contains-any", queryIdentifiers),
       limit(50),
     ),
-    query(collection(firestore, "chatThreads"), where("explorerId", "in", queryIdentifiers), limit(50)),
-    query(collection(firestore, "chatThreads"), where("cookId", "in", queryIdentifiers), limit(50)),
+    query(collection(store, "chatThreads"), where("explorerId", "in", queryIdentifiers), limit(50)),
+    query(collection(store, "chatThreads"), where("cookId", "in", queryIdentifiers), limit(50)),
   ];
 }
 
@@ -609,13 +618,13 @@ async function postThreadMessage(params: {
   bookingStatus?: BookingStatus;
   isBlocked?: boolean;
 }) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
 
-  if (!firestore) {
+  if (!store) {
     return;
   }
 
-  const threadSnapshot = await withTimeout(getDoc(doc(firestore, "chatThreads", params.threadId)), {
+  const threadSnapshot = await withTimeout(getDoc(doc(store, "chatThreads", params.threadId)), {
     timeoutMessage: "Loading this conversation is taking too long. Please try again.",
   });
   if (!threadSnapshot.exists()) {
@@ -652,7 +661,7 @@ async function postThreadMessage(params: {
   });
 
   await withTimeout(
-    addDoc(collection(firestore, "chatThreads", params.threadId, "messages"), {
+    addDoc(collection(store, "chatThreads", params.threadId, "messages"), {
       threadId: params.threadId,
       bookingId: params.bookingId,
       senderId: senderIdentifier,
@@ -664,7 +673,7 @@ async function postThreadMessage(params: {
     { timeoutMessage: "Sending your message is taking too long. Please try again." },
   );
 
-  await withTimeout(updateDoc(doc(firestore, "chatThreads", params.threadId), updatePayload), {
+  await withTimeout(updateDoc(doc(store, "chatThreads", params.threadId), updatePayload), {
     timeoutMessage: "Updating this conversation is taking too long. Please try again.",
   });
 
@@ -736,10 +745,10 @@ export async function createBookingRequest(input: {
   subtotalInput: string;
   ingredientBudgetInput?: string;
 }) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const explorer = await getCurrentUserRecord();
 
-  if (!firestore || !explorer) {
+  if (!store || !explorer) {
     throw new Error("You need to be signed in before creating a booking request.");
   }
 
@@ -756,8 +765,8 @@ export async function createBookingRequest(input: {
   }
 
   const nowIso = isoNow();
-  const bookingRef = doc(collection(firestore, "bookingRequests"));
-  const threadRef = doc(collection(firestore, "chatThreads"));
+  const bookingRef = doc(collection(store, "bookingRequests"));
+  const threadRef = doc(collection(store, "chatThreads"));
   const explorerParticipantId = explorer.id;
   const cookParticipantId = input.cook.id;
   const moneySummary = buildMoneySummary(subtotalAmount, ingredientBudgetAmount);
@@ -849,7 +858,7 @@ export async function createBookingRequest(input: {
     );
 
     await withTimeout(
-      addDoc(collection(firestore, "chatThreads", threadRef.id, "messages"), {
+      addDoc(collection(store, "chatThreads", threadRef.id, "messages"), {
         threadId: threadRef.id,
         bookingId: bookingRef.id,
         senderId: explorerParticipantId,
@@ -952,9 +961,9 @@ export async function createInstantMealBookingRequest(input: {
     subtotalInput: subtotal,
   });
 
-  const firestore = getFirestoreInstance();
-  if (firestore) {
-    await updateDoc(doc(firestore, "bookingRequests", result.bookingId), {
+  const store = getSupabaseStoreInstance();
+  if (store) {
+    await updateDoc(doc(store, "bookingRequests", result.bookingId), {
       instantMatch: true,
       deliveryMode: input.deliveryMode || "cook_delivery",
       latestOfferNote: "Instant match. Payment confirms this booking automatically.",
@@ -966,20 +975,20 @@ export async function createInstantMealBookingRequest(input: {
 }
 
 async function getBookingsForIdentifiers(field: "explorerId" | "cookId", identifiers: string[]) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !identifiers.length) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !identifiers.length) {
     return [] as BookingRecord[];
   }
 
   try {
     const snapshot = await withTimeout(
       getDocs(
-        query(collection(firestore, "bookingRequests"), where(field, "in", identifiers), limit(50)),
+        query(collection(store, "bookingRequests"), where(field, "in", identifiers), limit(50)),
       ),
       { timeoutMessage: "Loading bookings is taking too long. Please try again." },
     );
 
-    return snapshot.docs.map((item) => mapBookingRecord(item.id, item.data() as Record<string, unknown>));
+    return snapshot.docs.map((item: { id: string; data: () => unknown }) => mapBookingRecord(item.id, item.data() as Record<string, unknown>));
   } catch {
     return [] as BookingRecord[];
   }
@@ -998,8 +1007,8 @@ export function subscribeToBookingsForCurrentUser(
   callback: (bookings: BookingRecord[]) => void,
   onError?: (error: Error) => void,
 ) {
-  const firestore = getFirestoreInstance();
-  if (!firestore) {
+  const store = getSupabaseStoreInstance();
+  if (!store) {
     callback([]);
     return () => undefined;
   }
@@ -1014,12 +1023,12 @@ export function subscribeToBookingsForCurrentUser(
 
     unsubscribe = onSnapshot(
       query(
-        collection(firestore, "bookingRequests"),
+        collection(store, "bookingRequests"),
         where(currentUser.role === "cook" ? "cookId" : "explorerId", "in", identifiers),
         limit(50),
       ),
       (snapshot) => {
-        callback(snapshot.docs.map((item) => mapBookingRecord(item.id, item.data() as Record<string, unknown>)));
+        callback(snapshot.docs.map((item: { id: string; data: () => unknown }) => mapBookingRecord(item.id, item.data() as Record<string, unknown>)));
       },
       (error) => onError?.(error),
     );
@@ -1029,15 +1038,15 @@ export function subscribeToBookingsForCurrentUser(
 }
 
 export async function fetchThreadsForCurrentUser() {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const { currentUser, identifiers } = await getCurrentUserIdentifiers();
-  if (!firestore || !currentUser || !identifiers.length) {
+  if (!store || !currentUser || !identifiers.length) {
     return [] as ChatThreadRecord[];
   }
 
   try {
     const snapshots = await withTimeout(
-      Promise.all(buildThreadQueries(firestore, identifiers).map((threadQuery) => getDocs(threadQuery))),
+      Promise.all(buildThreadQueries(store, identifiers).map((threadQuery) => getDocs(threadQuery))),
       { timeoutMessage: "Loading chats is taking too long. Please try again." },
     );
 
@@ -1059,13 +1068,13 @@ export function subscribeToThreadsForCurrentUser(
   callback: (threads: ChatThreadRecord[]) => void,
   onError?: (error: Error) => void,
 ) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const cachedThreads = getCachedThreadsForCurrentUser();
   if (cachedThreads.length) {
     callback(cachedThreads);
   }
 
-  if (!firestore) {
+  if (!store) {
     callback([]);
     return () => undefined;
   }
@@ -1085,13 +1094,13 @@ export function subscribeToThreadsForCurrentUser(
     });
 
     const snapshotsBySource = new Map<number, ChatThreadRecord[]>();
-    const unsubscribers = buildThreadQueries(firestore, identifiers).map((threadQuery, index) =>
+    const unsubscribers = buildThreadQueries(store, identifiers).map((threadQuery, index) =>
       onSnapshot(
         threadQuery,
         (snapshot) => {
           snapshotsBySource.set(
             index,
-            snapshot.docs.map((item) => mapThreadRecord(item.id, item.data() as Record<string, unknown>)),
+            snapshot.docs.map((item: { id: string; data: () => unknown }) => mapThreadRecord(item.id, item.data() as Record<string, unknown>)),
           );
 
           const mergedThreads = new Map<string, ChatThreadRecord>();
@@ -1116,16 +1125,16 @@ export function subscribeToThreadsForCurrentUser(
 }
 
 export async function fetchMessagesForThread(threadId: string) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !threadId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !threadId.trim()) {
     return [] as ChatMessageRecord[];
   }
 
   try {
     const snapshot = await getDocs(
-      query(collection(firestore, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
+      query(collection(store, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
     );
-    const messages = snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
+    const messages = snapshot.docs.map((item: { id: string; data: () => unknown }) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
     await persistMessageCache(threadId, messages);
     return messages;
   } catch {
@@ -1138,8 +1147,8 @@ export function subscribeToMessagesForThread(
   callback: (messages: ChatMessageRecord[]) => void,
   onError?: (error: Error) => void,
 ) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !threadId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !threadId.trim()) {
     callback([]);
     return () => undefined;
   }
@@ -1151,9 +1160,9 @@ export function subscribeToMessagesForThread(
   });
 
   return onSnapshot(
-    query(collection(firestore, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
+    query(collection(store, "chatThreads", threadId, "messages"), orderBy("createdAt", "asc"), limit(200)),
     (snapshot) => {
-      const messages = snapshot.docs.map((item) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
+      const messages = snapshot.docs.map((item: { id: string; data: () => unknown }) => mapMessageRecord(item.id, item.data() as Record<string, unknown>));
       void persistMessageCache(threadId, messages);
       callback(messages);
     },
@@ -1177,14 +1186,25 @@ function buildThreadReadUpdate(thread: ChatThreadRecord, currentUser: Pick<Store
   return updatePayload;
 }
 
+function getThreadCurrentUserLastReadAt(
+  thread: ChatThreadRecord,
+  currentUser: Pick<StoredUser, "id" | "email">,
+) {
+  const matchingIdentifiers = getMatchingParticipantIds(thread.participantIds, currentUser);
+  return matchingIdentifiers.reduce((latest, identifier) => {
+    const nextValue = thread.lastReadAtBy[toSafeFieldKey(identifier)] ?? "";
+    return nextValue > latest ? nextValue : latest;
+  }, "");
+}
+
 export async function markThreadAsRead(threadId: string) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const currentUser = await getCurrentUserRecord();
-  if (!firestore || !currentUser || !threadId.trim()) {
+  if (!store || !currentUser || !threadId.trim()) {
     return;
   }
 
-  const snapshot = await withTimeout(getDoc(doc(firestore, "chatThreads", threadId)), {
+  const snapshot = await withTimeout(getDoc(doc(store, "chatThreads", threadId)), {
     timeoutMessage: "Loading this chat is taking too long. Please try again.",
   });
   if (!snapshot.exists()) {
@@ -1192,20 +1212,26 @@ export async function markThreadAsRead(threadId: string) {
   }
 
   const thread = mapThreadRecord(snapshot.id, snapshot.data() as Record<string, unknown>);
-  if (getThreadUnreadCount(thread, currentUser) === 0) {
+  const currentLastReadAt = getThreadCurrentUserLastReadAt(thread, currentUser);
+  const lastMessageAt = thread.lastMessageAt || "";
+  const alreadyReadLatest =
+    Boolean(currentLastReadAt && lastMessageAt) &&
+    new Date(currentLastReadAt).getTime() >= new Date(lastMessageAt).getTime();
+
+  if (getThreadUnreadCount(thread, currentUser) === 0 && alreadyReadLatest) {
     return;
   }
 
   await withTimeout(
-    updateDoc(doc(firestore, "chatThreads", threadId), buildThreadReadUpdate(thread, currentUser)),
+    updateDoc(doc(store, "chatThreads", threadId), buildThreadReadUpdate(thread, currentUser)),
     { timeoutMessage: "Marking messages as read is taking too long. Please try again." },
   );
 }
 
 export async function sendMessageToThread(threadId: string, body: string) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const currentUser = await getCurrentUserRecord();
-  if (!firestore || !currentUser) {
+  if (!store || !currentUser) {
     throw new Error("You need to be signed in to send a message.");
   }
 
@@ -1214,7 +1240,7 @@ export async function sendMessageToThread(threadId: string, body: string) {
     throw new Error("Type a message before sending.");
   }
 
-  const threadSnapshot = await withTimeout(getDoc(doc(firestore, "chatThreads", threadId)), {
+  const threadSnapshot = await withTimeout(getDoc(doc(store, "chatThreads", threadId)), {
     timeoutMessage: "Loading this chat is taking too long. Please try again.",
   });
   if (!threadSnapshot.exists()) {
@@ -1235,12 +1261,12 @@ export async function sendMessageToThread(threadId: string, body: string) {
 }
 
 export async function fetchThreadById(threadId: string) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !threadId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !threadId.trim()) {
     return null;
   }
 
-  const snapshot = await withTimeout(getDoc(doc(firestore, "chatThreads", threadId)), {
+  const snapshot = await withTimeout(getDoc(doc(store, "chatThreads", threadId)), {
     timeoutMessage: "Loading this conversation is taking too long. Please try again.",
   });
   return snapshot.exists() ? mapThreadRecord(snapshot.id, snapshot.data() as Record<string, unknown>) : null;
@@ -1251,14 +1277,14 @@ export function subscribeToThreadById(
   callback: (thread: ChatThreadRecord | null) => void,
   onError?: (error: Error) => void,
 ) {
-  const firestore = getFirestoreInstance();
-  if (!firestore || !threadId.trim()) {
+  const store = getSupabaseStoreInstance();
+  if (!store || !threadId.trim()) {
     callback(null);
     return () => undefined;
   }
 
   return onSnapshot(
-    doc(firestore, "chatThreads", threadId),
+    doc(store, "chatThreads", threadId),
     (snapshot) => callback(snapshot.exists() ? mapThreadRecord(snapshot.id, snapshot.data() as Record<string, unknown>) : null),
     (error) => onError?.(error),
   );
@@ -1274,34 +1300,34 @@ export async function fetchThreadPartner(thread: ChatThreadRecord, currentUserId
 }
 
 async function getBookingOrThrow(bookingId: string) {
-  const firestore = getFirestoreInstance();
-  if (!firestore) {
-    throw new Error("Firestore is not available.");
+  const store = getSupabaseStoreInstance();
+  if (!store) {
+    throw new Error("Booking services are not available right now.");
   }
 
-  const snapshot = await withTimeout(getDoc(doc(firestore, "bookingRequests", bookingId)), {
+  const snapshot = await withTimeout(getDoc(doc(store, "bookingRequests", bookingId)), {
     timeoutMessage: "Loading this booking is taking too long. Please try again.",
   });
   if (!snapshot.exists()) {
     throw new Error("Booking request could not be found.");
   }
 
-  return { firestore, booking: mapBookingRecord(snapshot.id, snapshot.data() as Record<string, unknown>) };
+  return { store, booking: mapBookingRecord(snapshot.id, snapshot.data() as Record<string, unknown>) };
 }
 
-export async function confirmBookingPaymentDummy(bookingId: string) {
+export async function confirmBookingPaymentHold(bookingId: string) {
   const currentUser = await getCurrentUserRecord();
   if (!currentUser) {
     throw new Error("You need to be signed in before completing payment.");
   }
 
-  const { firestore, booking } = await getBookingOrThrow(bookingId);
+  const { store, booking } = await getBookingOrThrow(bookingId);
   if (!matchesAccountIdentifier(booking.explorerId, currentUser)) {
     throw new Error("Only the explorer who created this request can complete payment.");
   }
 
   await setDoc(
-    doc(firestore, "payments", bookingId),
+    doc(store, "payments", bookingId),
     {
       bookingId: booking.id,
       explorerId: booking.explorerId,
@@ -1314,8 +1340,8 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
       platformFeeAmount: booking.platformFeeAmount,
       payoutAmount: booking.payoutAmount,
       currencyCode: booking.currencyCode,
-      status: "held_dummy",
-      provider: "dummy",
+      status: "held",
+      provider: "platform_hold",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -1324,7 +1350,7 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
 
   const nextStatus: BookingStatus = booking.instantMatch ? "accepted" : "pending_cook";
 
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: nextStatus,
     fundsReleaseStatus: "held",
     updatedAt: serverTimestamp(),
@@ -1335,8 +1361,8 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
     bookingId: booking.id,
     sender: currentUser,
     body: booking.instantMatch
-      ? "Test Paystack payment completed. This instant match is confirmed and ready for service."
-      : "Dummy payment completed. Funds are now held in-app until trust/release is confirmed.",
+      ? "Payment authorization completed. This instant match is confirmed and ready for service."
+      : "Payment authorization completed. Funds are held in-app until trust/release is confirmed.",
     bookingStatus: nextStatus,
   });
 
@@ -1357,21 +1383,21 @@ export async function confirmBookingPaymentDummy(bookingId: string) {
 }
 
 async function getExplorerOwnedBooking(bookingId: string, currentUser: StoredUser) {
-  const { firestore, booking } = await getBookingOrThrow(bookingId);
+  const { store, booking } = await getBookingOrThrow(bookingId);
   if (!matchesAccountIdentifier(booking.explorerId, currentUser)) {
     throw new Error("Only the explorer who created this booking can change it.");
   }
 
-  return { firestore, booking };
+  return { store, booking };
 }
 
 async function getCookOwnedBooking(bookingId: string, currentUser: StoredUser) {
-  const { firestore, booking } = await getBookingOrThrow(bookingId);
+  const { store, booking } = await getBookingOrThrow(bookingId);
   if (!matchesAccountIdentifier(booking.cookId, currentUser)) {
     throw new Error("Only the cook on this booking can change it.");
   }
 
-  return { firestore, booking };
+  return { store, booking };
 }
 
 export async function cancelBookingAsExplorer(bookingId: string) {
@@ -1380,8 +1406,8 @@ export async function cancelBookingAsExplorer(bookingId: string) {
     throw new Error("You need to be signed in before changing this booking.");
   }
 
-  const { firestore, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  const { store, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: "cancelled",
     cancellationReason: "Cancelled by explorer",
     updatedAt: serverTimestamp(),
@@ -1414,7 +1440,7 @@ export async function deleteArchivedBookingForCurrentUser(bookingId: string) {
     throw new Error("You need to be signed in before deleting this booking.");
   }
 
-  const { firestore, booking } = await getBookingOrThrow(bookingId);
+  const { store, booking } = await getBookingOrThrow(bookingId);
   const canDelete =
     (matchesAccountIdentifier(booking.explorerId, currentUser) ||
       matchesAccountIdentifier(booking.cookId, currentUser)) &&
@@ -1424,7 +1450,7 @@ export async function deleteArchivedBookingForCurrentUser(bookingId: string) {
     throw new Error("Only archived cancelled or declined bookings can be deleted.");
   }
 
-  await deleteDoc(doc(firestore, "bookingRequests", bookingId));
+  await deleteDoc(doc(store, "bookingRequests", bookingId));
 }
 
 export async function rescheduleBookingAsExplorer(bookingId: string, nextServiceDateLabel: string, note: string) {
@@ -1438,8 +1464,8 @@ export async function rescheduleBookingAsExplorer(bookingId: string, nextService
     throw new Error("Add the new date or time before requesting a reschedule.");
   }
 
-  const { firestore, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  const { store, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     serviceDateLabel: trimmedDate,
     notes: [booking.notes, note.trim()].filter(Boolean).join("\n\n"),
     status: "pending_cook",
@@ -1479,12 +1505,12 @@ export async function counterBookingOfferAsExplorer(bookingId: string, amount: s
     throw new Error("Add a valid offer amount.");
   }
 
-  const { firestore, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
+  const { store, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
   const moneySummary = buildMoneySummary(nextAmount, booking.ingredientBudgetAmount);
   const trimmedNote = note.trim();
   const nextStatus = booking.fundsReleaseStatus === "held" ? "pending_cook" : "pending_payment";
 
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     subtotalAmount: nextAmount,
     explorerFeeAmount: moneySummary.explorerFeeAmount,
     cookFeeAmount: moneySummary.cookFeeAmount,
@@ -1516,17 +1542,17 @@ export async function releaseBookingFundsAsExplorer(bookingId: string) {
     throw new Error("You need to be signed in before releasing funds.");
   }
 
-  const { firestore, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
+  const { store, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
 
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: "funds_released",
     fundsReleaseStatus: "released",
     trustReleaseConfirmed: true,
     updatedAt: serverTimestamp(),
   });
 
-  await updateDoc(doc(firestore, "payments", bookingId), {
-    status: "released_dummy",
+  await updateDoc(doc(store, "payments", bookingId), {
+    status: "released",
     updatedAt: serverTimestamp(),
   });
 
@@ -1534,7 +1560,7 @@ export async function releaseBookingFundsAsExplorer(bookingId: string) {
     threadId: booking.threadId,
     bookingId: booking.id,
     sender: currentUser,
-    body: `Explorer marked trust/release. Dummy payout of ${booking.payoutAmount} is now released to the cook.`,
+    body: `Explorer marked trust/release. Payout of ${booking.payoutAmount} is now released to the cook.`,
     bookingStatus: "funds_released",
     isBlocked: true,
   });
@@ -1557,8 +1583,8 @@ export async function completeBookingAsCook(bookingId: string, note: string) {
     throw new Error("You need to be signed in before updating this booking.");
   }
 
-  const { firestore, booking } = await getCookOwnedBooking(bookingId, currentUser);
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  const { store, booking } = await getCookOwnedBooking(bookingId, currentUser);
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: "completed",
     updatedAt: serverTimestamp(),
   });
@@ -1592,8 +1618,8 @@ export async function acceptBookingAsCook(bookingId: string, note: string) {
     throw new Error("You need to be signed in before changing this request.");
   }
 
-  const { firestore, booking } = await getCookOwnedBooking(bookingId, currentUser);
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  const { store, booking } = await getCookOwnedBooking(bookingId, currentUser);
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: "accepted",
     negotiationOpen: false,
     updatedAt: serverTimestamp(),
@@ -1632,8 +1658,8 @@ export async function declineBookingAsCook(bookingId: string, reason: string) {
     throw new Error("Add a reason before declining this request.");
   }
 
-  const { firestore, booking } = await getCookOwnedBooking(bookingId, currentUser);
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  const { store, booking } = await getCookOwnedBooking(bookingId, currentUser);
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     status: "declined",
     cancellationReason: trimmedReason,
     negotiationOpen: false,
@@ -1672,11 +1698,11 @@ export async function counterBookingOfferAsCook(bookingId: string, amount: strin
     throw new Error("Add a valid counter amount.");
   }
 
-  const { firestore, booking } = await getCookOwnedBooking(bookingId, currentUser);
+  const { store, booking } = await getCookOwnedBooking(bookingId, currentUser);
   const moneySummary = buildMoneySummary(nextAmount, booking.ingredientBudgetAmount);
   const trimmedNote = note.trim();
 
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     subtotalAmount: nextAmount,
     explorerFeeAmount: moneySummary.explorerFeeAmount,
     cookFeeAmount: moneySummary.cookFeeAmount,
@@ -1719,9 +1745,9 @@ export async function acceptCounterOfferAsExplorer(bookingId: string) {
     throw new Error("You need to be signed in before accepting this offer.");
   }
 
-  const { firestore, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
+  const { store, booking } = await getExplorerOwnedBooking(bookingId, currentUser);
   const nextStatus = booking.fundsReleaseStatus === "held" ? "pending_cook" : "pending_payment";
-  await updateDoc(doc(firestore, "bookingRequests", bookingId), {
+  await updateDoc(doc(store, "bookingRequests", bookingId), {
     negotiationOpen: false,
     status: nextStatus,
     updatedAt: serverTimestamp(),
@@ -1748,13 +1774,13 @@ export async function acceptCounterOfferAsExplorer(bookingId: string) {
 }
 
 export async function archiveThreadForCurrentUser(threadId: string) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const currentUser = await getCurrentUserRecord();
-  if (!firestore || !currentUser || !threadId.trim()) {
+  if (!store || !currentUser || !threadId.trim()) {
     throw new Error("You need to be signed in before archiving a thread.");
   }
 
-  const threadSnapshot = await getDoc(doc(firestore, "chatThreads", threadId));
+  const threadSnapshot = await getDoc(doc(store, "chatThreads", threadId));
   if (!threadSnapshot.exists()) {
     throw new Error("That chat thread could not be found.");
   }
@@ -1765,17 +1791,17 @@ export async function archiveThreadForCurrentUser(threadId: string) {
   identifiers.forEach((identifier) => {
     updatePayload[`archivedBy.${toSafeFieldKey(identifier)}`] = true;
   });
-  await updateDoc(doc(firestore, "chatThreads", threadId), updatePayload);
+  await updateDoc(doc(store, "chatThreads", threadId), updatePayload);
 }
 
 export async function deleteThreadForCurrentUser(threadId: string) {
-  const firestore = getFirestoreInstance();
+  const store = getSupabaseStoreInstance();
   const currentUser = await getCurrentUserRecord();
-  if (!firestore || !currentUser || !threadId.trim()) {
+  if (!store || !currentUser || !threadId.trim()) {
     throw new Error("You need to be signed in before hiding a thread.");
   }
 
-  const threadSnapshot = await getDoc(doc(firestore, "chatThreads", threadId));
+  const threadSnapshot = await getDoc(doc(store, "chatThreads", threadId));
   if (!threadSnapshot.exists()) {
     throw new Error("That chat thread could not be found.");
   }
@@ -1786,5 +1812,5 @@ export async function deleteThreadForCurrentUser(threadId: string) {
   identifiers.forEach((identifier) => {
     updatePayload[`hiddenBy.${toSafeFieldKey(identifier)}`] = true;
   });
-  await updateDoc(doc(firestore, "chatThreads", threadId), updatePayload);
+  await updateDoc(doc(store, "chatThreads", threadId), updatePayload);
 }

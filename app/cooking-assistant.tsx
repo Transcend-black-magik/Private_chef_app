@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -17,18 +18,58 @@ import {
 
 import {
   generateFoodAssistantReply,
+  type FoodAssistantAction,
   type FoodAssistantMessage,
+  type FoodAssistantUserContext,
 } from "@/lib/food-ai";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
+import { getSession } from "@/lib/app-state";
 import { heroFoodImages } from "@/lib/food-visuals";
 import { getTheme, theme } from "@/theme/theme";
 
-const ASSISTANT_SUBSCRIPTION_KEY = "cook-for-me:food-ai-subscription-active";
+const ASSISTANT_SUBSCRIPTION_KEY = "private-chef:food-ai-subscription-active";
+const ASSISTANT_MESSAGES_KEY_PREFIX = "private-chef:food-ai-messages:";
 
 const starterPrompts = [
   "Plan a high-protein dinner",
   "What can I eat after gym?",
   "Build a 3-day meal prep",
   "Find meals for weight loss",
+];
+
+const capabilityTopics = [
+  {
+    label: "Meal plans",
+    prompts: [
+      "Build me a realistic 3-day meal plan.",
+      "Plan a high-protein week with simple groceries.",
+      "Make a quick meal prep plan for busy days.",
+    ],
+  },
+  {
+    label: "Health goals",
+    prompts: [
+      "Help me eat better without making food boring.",
+      "Make a weight-loss dinner plan that still feels filling.",
+      "Help me balance gym fuel, cravings, and portion sizes.",
+    ],
+  },
+  {
+    label: "Recipe help",
+    prompts: [
+      "Turn what I have at home into a good recipe.",
+      "Give me a fast recipe with clear steps and timing.",
+      "Help me fix a dish that tastes flat.",
+    ],
+  },
+  {
+    label: "Cook matching",
+    prompts: [
+      "Help me decide when to book a cook instead of cooking myself.",
+      "Suggest dishes that are worth booking a cook for.",
+      "Help me write a clear booking request for a cook.",
+    ],
+  },
 ];
 
 const plans = [
@@ -55,30 +96,102 @@ const initialMessages: FoodAssistantMessage[] = [
 ];
 
 type AssistantMode = "landing" | "plans" | "chat";
+type AssistantConnectionStatus = "online" | "offline" | "connecting";
 
 export default function CookingAssistantScreen() {
   const colorScheme = useColorScheme();
   const activeTheme = getTheme(colorScheme);
   const styles = createStyles(activeTheme);
   const scrollRef = useRef<ScrollView | null>(null);
+  const memoryKeyRef = useRef(`${ASSISTANT_MESSAGES_KEY_PREFIX}guest`);
   const [mode, setMode] = useState<AssistantMode>("landing");
   const [hasSubscription, setHasSubscription] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(plans[0].id);
   const [messages, setMessages] = useState<FoodAssistantMessage[]>(initialMessages);
+  const [assistantUser, setAssistantUser] = useState<FoodAssistantUserContext | null>(null);
+  const [memoryLoaded, setMemoryLoaded] = useState(false);
+  const [topicTick, setTopicTick] = useState(0);
+  const [pendingStarter, setPendingStarter] = useState("");
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<AssistantConnectionStatus>("online");
+  const streamIdRef = useRef(0);
   const selectedPlanDetails = useMemo(
     () => plans.find((plan) => plan.id === selectedPlan) ?? plans[0],
     [selectedPlan],
   );
 
   useEffect(() => {
-    async function loadSubscription() {
-      setHasSubscription((await AsyncStorage.getItem(ASSISTANT_SUBSCRIPTION_KEY)) === "true");
+    async function loadAssistantState() {
+      const session = await getSession();
+      memoryKeyRef.current = `${ASSISTANT_MESSAGES_KEY_PREFIX}${session?.id || "guest"}`;
+      setAssistantUser(
+        session
+          ? {
+              id: session.id,
+              role: session.role,
+              profileComplete: session.profileComplete,
+            }
+          : null,
+      );
+      const [subscriptionValue, savedMessages] = await Promise.all([
+        AsyncStorage.getItem(ASSISTANT_SUBSCRIPTION_KEY),
+        AsyncStorage.getItem(memoryKeyRef.current),
+      ]);
+
+      setHasSubscription(subscriptionValue === "true");
+
+      if (savedMessages) {
+        try {
+          const parsed = JSON.parse(savedMessages);
+          if (Array.isArray(parsed) && parsed.length) {
+            setMessages(
+              parsed
+                .filter(
+                  (message): message is FoodAssistantMessage =>
+                    message &&
+                    typeof message === "object" &&
+                    (message.role === "user" || message.role === "assistant") &&
+                    typeof message.content === "string",
+                )
+                .map((message) => ({
+                  role: message.role,
+                  content: message.content,
+                  actions: sanitizeMessageActions(message.actions),
+                }))
+                .slice(-60),
+            );
+          }
+        } catch {
+          // Assistant memory is helpful, but a bad cache should never block chat.
+        }
+      }
+
+      setMemoryLoaded(true);
     }
 
-    void loadSubscription();
+    void loadAssistantState();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTopicTick((value) => value + 1);
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!memoryLoaded) {
+      return;
+    }
+
+    void AsyncStorage.setItem(memoryKeyRef.current, JSON.stringify(messages.slice(-60)));
+  }, [memoryLoaded, messages]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, [messages, mode]);
 
   async function startAssistant() {
     if (hasSubscription) {
@@ -93,6 +206,23 @@ export default function CookingAssistantScreen() {
     await AsyncStorage.setItem(ASSISTANT_SUBSCRIPTION_KEY, "true");
     setHasSubscription(true);
     setMode("chat");
+
+    if (pendingStarter) {
+      const starter = pendingStarter;
+      setPendingStarter("");
+      requestAnimationFrame(() => void sendMessage(starter));
+    }
+  }
+
+  function openTopic(prompt: string) {
+    if (!hasSubscription) {
+      setPendingStarter(prompt);
+      setMode("plans");
+      return;
+    }
+
+    setMode("chat");
+    requestAnimationFrame(() => void sendMessage(prompt));
   }
 
   async function sendMessage(nextText = draft) {
@@ -103,28 +233,83 @@ export default function CookingAssistantScreen() {
     }
 
     const nextMessages: FoodAssistantMessage[] = [...messages, { role: "user", content: trimmed }];
-    setMessages(nextMessages);
+    const pendingMessage: FoodAssistantMessage = {
+      role: "assistant",
+      content: "I’m reading your message and checking the best food plan, nutrition angle, or app action.",
+    };
+    const streamId = streamIdRef.current + 1;
+    streamIdRef.current = streamId;
+
+    Keyboard.dismiss();
+    setMessages([...nextMessages, pendingMessage]);
     setDraft("");
     setIsThinking(true);
+    setConnectionStatus("connecting");
 
     try {
-      const reply = await generateFoodAssistantReply(nextMessages);
-      setMessages([...nextMessages, { role: "assistant", content: reply }]);
+      const response = await generateFoodAssistantReply(nextMessages, assistantUser);
+      setConnectionStatus(response.remoteAvailable === false ? "offline" : "online");
+      revealAssistantReply({
+        streamId,
+        baseMessages: nextMessages,
+        reply: response.reply,
+        actions: response.actions,
+      });
     } catch (error) {
-      setMessages([
-        ...nextMessages,
-        {
-          role: "assistant",
-          content:
-            error instanceof Error
-              ? error.message
-              : "I could not reach the assistant right now. Try again in a moment.",
-        },
-      ]);
+      setConnectionStatus("offline");
+      const fallback = toSafeUserErrorMessage(
+        error instanceof Error ? error.message : "",
+        "I could not reach the assistant right now. I can still help with local meal guidance while your connection recovers.",
+      );
+      revealAssistantReply({ streamId, baseMessages: nextMessages, reply: fallback, actions: [] });
     } finally {
       setIsThinking(false);
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     }
+  }
+
+  function revealAssistantReply(params: {
+    streamId: number;
+    baseMessages: FoodAssistantMessage[];
+    reply: string;
+    actions: FoodAssistantAction[];
+  }) {
+    const words = params.reply.split(/(\s+)/);
+    let cursor = 0;
+
+    function tick() {
+      if (streamIdRef.current !== params.streamId) {
+        return;
+      }
+
+      cursor = Math.min(words.length, cursor + 4);
+      const visibleReply = words.slice(0, cursor).join("");
+      const done = cursor >= words.length;
+
+      setMessages([
+        ...params.baseMessages,
+        {
+          role: "assistant",
+          content: visibleReply,
+          actions: done ? params.actions : [],
+        },
+      ]);
+
+      if (!done) {
+        setTimeout(tick, 28);
+      }
+    }
+
+    tick();
+  }
+
+  function handleAssistantAction(action: FoodAssistantAction) {
+    if (action.params && Object.keys(action.params).length > 0) {
+      router.push({ pathname: action.route, params: action.params } as never);
+      return;
+    }
+
+    router.push(action.route as never);
   }
 
   if (mode === "landing") {
@@ -153,12 +338,16 @@ export default function CookingAssistantScreen() {
         </View>
 
         <View style={styles.capabilityGrid}>
-          {["Meal plans", "Health goals", "Recipe help", "Cook matching"].map((item) => (
-            <View key={item} style={styles.capabilityCard}>
-              <Ionicons name="checkmark-circle-outline" size={18} color={activeTheme.primaryDark} />
-              <Text style={styles.capabilityText}>{item}</Text>
-            </View>
-          ))}
+          {capabilityTopics.map((item, index) => {
+            const prompt = item.prompts[(topicTick + index) % item.prompts.length];
+            return (
+              <Pressable key={item.label} style={styles.capabilityCard} onPress={() => openTopic(prompt)}>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={activeTheme.primaryDark} />
+                <Text style={styles.capabilityText}>{item.label}</Text>
+                <Text numberOfLines={2} style={styles.capabilityPrompt}>{prompt}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
     );
@@ -223,6 +412,22 @@ export default function CookingAssistantScreen() {
         <View style={styles.headerCenter}>
           <Text style={styles.kicker}>Food AI</Text>
           <Text style={styles.title}>Food companion</Text>
+          <View style={styles.statusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                connectionStatus === "offline" && styles.statusDotOffline,
+                connectionStatus === "connecting" && styles.statusDotConnecting,
+              ]}
+            />
+            <Text style={styles.statusText}>
+              {connectionStatus === "connecting"
+                ? "Checking connection"
+                : connectionStatus === "offline"
+                  ? "Offline guidance active"
+                  : "Online"}
+            </Text>
+          </View>
         </View>
         <View style={styles.planPill}>
           <Ionicons name="diamond-outline" size={15} color="#FFFFFF" />
@@ -255,24 +460,31 @@ export default function CookingAssistantScreen() {
             >
               {!isUser ? (
                 <View style={styles.assistantMark}>
-                  <Ionicons name="leaf-outline" size={15} color={activeTheme.primaryDark} />
+                  <Image source={require("@/assets/images/icon.png")} style={styles.assistantLogo} contentFit="contain" />
                 </View>
               ) : null}
               <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
                 <Text style={[styles.bubbleText, isUser ? styles.userBubbleText : styles.assistantBubbleText]}>
                   {message.content}
                 </Text>
+                {!isUser && message.actions?.length ? (
+                  <View style={styles.actionRow}>
+                    {message.actions.map((action) => (
+                      <Pressable
+                        key={`${action.route}-${action.label}`}
+                        style={styles.actionButton}
+                        onPress={() => handleAssistantAction(action)}
+                      >
+                        <Text style={styles.actionButtonText}>{action.label}</Text>
+                        <Ionicons name="chevron-forward" size={14} color={activeTheme.primaryDark} />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             </View>
           );
         })}
-
-        {isThinking ? (
-          <View style={styles.thinkingRow}>
-            <View style={styles.thinkingDot} />
-            <Text style={styles.thinkingText}>Typing...</Text>
-          </View>
-        ) : null}
       </ScrollView>
 
       <View style={styles.composerWrap}>
@@ -298,6 +510,24 @@ export default function CookingAssistantScreen() {
       </View>
     </KeyboardAvoidingView>
   );
+}
+
+function sanitizeMessageActions(actions: unknown): FoodAssistantAction[] {
+  if (!Array.isArray(actions)) {
+    return [];
+  }
+
+  return actions
+    .filter((action): action is FoodAssistantAction =>
+      Boolean(
+        action &&
+          typeof action === "object" &&
+          typeof action.label === "string" &&
+          typeof action.route === "string" &&
+          (action.type === "navigate" || action.type === "search" || action.type === "start_booking"),
+      ),
+    )
+    .slice(0, 3);
 }
 
 const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
@@ -350,7 +580,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     capabilityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
     capabilityCard: {
       width: "48%",
-      minHeight: 74,
+      minHeight: 118,
       borderRadius: 22,
       backgroundColor: activeTheme.surface,
       borderWidth: 1,
@@ -359,6 +589,7 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       gap: 8,
     },
     capabilityText: { color: activeTheme.text, fontSize: 14, fontWeight: "900" },
+    capabilityPrompt: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 17, fontWeight: "700" },
     planContent: { padding: theme.spacing.lg, paddingTop: theme.layout.screenTop, gap: theme.spacing.md },
     planHeader: { gap: 10, marginBottom: 8 },
     planTitle: { color: activeTheme.text, fontSize: 31, lineHeight: 38, fontWeight: "900" },
@@ -418,6 +649,11 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     headerCenter: { flex: 1, gap: 2 },
     kicker: { color: activeTheme.primaryDark, fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
     title: { color: activeTheme.text, fontSize: 21, lineHeight: 26, fontWeight: "900" },
+    statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+    statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: activeTheme.primaryDark },
+    statusDotOffline: { backgroundColor: activeTheme.danger },
+    statusDotConnecting: { backgroundColor: "#FFAA26" },
+    statusText: { color: activeTheme.textMuted, fontSize: 11, fontWeight: "800" },
     planPill: {
       minHeight: 38,
       borderRadius: theme.radius.pill,
@@ -455,7 +691,9 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: activeTheme.safeSurface,
+      overflow: "hidden",
     },
+    assistantLogo: { width: 22, height: 22 },
     bubble: {
       maxWidth: "82%",
       borderRadius: 22,
@@ -475,6 +713,28 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     bubbleText: { fontSize: 14, lineHeight: 21, fontWeight: "700" },
     assistantBubbleText: { color: activeTheme.text },
     userBubbleText: { color: "#FFFFFF" },
+    actionRow: {
+      marginTop: 10,
+      gap: 8,
+    },
+    actionButton: {
+      minHeight: 38,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      backgroundColor: activeTheme.safeSurface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    actionButtonText: {
+      flex: 1,
+      color: activeTheme.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+    },
     thinkingRow: {
       alignSelf: "flex-start",
       minHeight: 38,

@@ -57,8 +57,8 @@ export function getCookProfileRequirements(user: StoredUser): ProfileRequirement
       complete: hasText(user.countryName),
     },
     {
-      key: "governmentId",
-      label: "Government ID",
+      key: "platformTrust",
+      label: "Platform trust",
       complete: hasText(user.cookVerification?.documentNumber),
     },
     { key: "bio", label: "Bio", complete: hasText(user.bio) },
@@ -96,6 +96,11 @@ export function getCookProfileRequirements(user: StoredUser): ProfileRequirement
       key: "safetyPractices",
       label: "Kitchen and safety practices",
       complete: hasText(user.safetyPractices),
+    },
+    {
+      key: "nutritionServices",
+      label: "Nutrition support",
+      complete: hasText(user.nutritionServices),
     },
   ];
 }

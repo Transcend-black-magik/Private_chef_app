@@ -32,7 +32,9 @@ export default function DiscoveryCookCard({
         <View style={styles.imageShade} />
         <View style={styles.imageBadge}>
           <Ionicons name="star" size={13} color="#FFCA45" />
-          <Text style={styles.imageBadgeText}>{cook.verified ? "4.9" : "4.7"}</Text>
+          <Text style={styles.imageBadgeText}>
+            {cook.ratingCount > 0 ? cook.ratingAverage.toFixed(1) : "New"}
+          </Text>
         </View>
       </View>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +15,7 @@ import { router } from "expo-router";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import { getCurrentUserRecord, saveUserRecord, type StoredUser } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { getTheme, theme } from "@/theme/theme";
 
 const tasteOptions = ["Spicy", "Comforting", "Fresh", "Smoky", "Light", "Rich"];
@@ -73,6 +75,7 @@ export default function CompanionPreferencesScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setIsSaving(true);
     setError("");
 
@@ -94,7 +97,7 @@ export default function CompanionPreferencesScreen() {
       await saveUserRecord(nextUser);
       router.back();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not save your companion settings.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not save your companion settings."));
     } finally {
       setIsSaving(false);
     }

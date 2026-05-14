@@ -165,8 +165,8 @@ export default function CookHomeScreen() {
         done: Boolean(completion && completion.percent >= 100),
       },
       {
-        title: "Finish identity review",
-        body: "Verified cooks look more reliable before the first message and booking decision.",
+        title: "Finish platform trust",
+        body: "Verified cook profiles look more reliable before the first message and booking decision.",
         done: verificationStatus === "verified",
       },
       {

@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
-import { getCurrentUserRecord, saveUserRecord, type StoredUser } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { formatCurrency } from "@/lib/currency";
 import { heroFoodImages } from "@/lib/food-visuals";
-import { getDocumentPlaceholder, shouldRequireExplorerVerificationForOrder } from "@/lib/identity-review";
 import {
-  confirmBookingPaymentDummy,
-  fetchBookingsForCurrentUser,
+  confirmBookingPaymentHold,
+  subscribeToBookingsForCurrentUser,
   type BookingRecord,
 } from "@/lib/marketplace";
 import { getTheme, theme } from "@/theme/theme";
@@ -24,7 +23,7 @@ function buildCheckoutPlans(booking: BookingRecord | null) {
     {
       id: "full",
       title: `${total} / service`,
-      badge: "Test Paystack",
+      badge: "Protected hold",
       lines: ["Instant chef match", "Funds held safely", "Auto-confirmed after payment"],
     },
     {
@@ -47,22 +46,24 @@ export default function CheckoutScreen() {
   const styles = createStyles(activeTheme);
   const params = useLocalSearchParams<{ bookingId?: string; threadId?: string; instant?: string }>();
   const [booking, setBooking] = useState<BookingRecord | null>(null);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
-  const [documentType, setDocumentType] = useState("");
-  const [documentNumber, setDocumentNumber] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    async function loadBooking() {
-      const [bookings, user] = await Promise.all([fetchBookingsForCurrentUser(), getCurrentUserRecord()]);
+    let isMounted = true;
+    const unsubscribe = subscribeToBookingsForCurrentUser((bookings) => {
+      if (!isMounted) {
+        return;
+      }
+
       const nextBooking = bookings.find((item) => item.id === params.bookingId) || null;
       setBooking(nextBooking);
-      setCurrentUser(user);
-      setDocumentType(user?.countryName ? getDocumentPlaceholder(user.countryName) : "Government ID or passport number");
-    }
+    });
 
-    void loadBooking();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [params.bookingId]);
 
   async function handleCheckout() {
@@ -71,34 +72,12 @@ export default function CheckoutScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setIsLoading(true);
     setError("");
 
     try {
-      if (currentUser && shouldRequireExplorerVerificationForOrder(currentUser)) {
-        if (!documentNumber.trim()) {
-          throw new Error("Add your ID number before your first protected order.");
-        }
-
-        const verifiedUser: StoredUser = {
-          ...currentUser,
-          cookVerification: {
-            provider: currentUser.countryCode === "NG" ? "dojah" : "persona",
-            status: "pending_review",
-            countryCode: currentUser.countryCode || "",
-            countryName: currentUser.countryName || "",
-            documentType: documentType.trim(),
-            documentNumber: documentNumber.trim(),
-            submittedAt: new Date().toISOString(),
-          },
-          updatedAt: new Date().toISOString(),
-        };
-
-        await saveUserRecord(verifiedUser);
-        setCurrentUser(verifiedUser);
-      }
-
-      const result = await confirmBookingPaymentDummy(params.bookingId);
+      const result = await confirmBookingPaymentHold(params.bookingId);
       if (params.instant === "1") {
         router.replace("/explore" as never);
         return;
@@ -109,7 +88,7 @@ export default function CheckoutScreen() {
         params: { id: params.threadId || result.threadId },
       });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not complete this test payment.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not complete this payment step."));
     } finally {
       setIsLoading(false);
     }
@@ -138,27 +117,6 @@ export default function CheckoutScreen() {
 
           <View style={styles.checkoutPanel}>
             <Text style={styles.title}>Taste Journey Plus</Text>
-
-            {currentUser && shouldRequireExplorerVerificationForOrder(currentUser) ? (
-              <View style={styles.verificationCard}>
-                <Text style={styles.sectionTitle}>First-order identity check</Text>
-                <TextInput
-                  value={documentType}
-                  onChangeText={setDocumentType}
-                  placeholder="Document type"
-                  placeholderTextColor={activeTheme.textMuted}
-                  style={styles.input}
-                />
-                <TextInput
-                  value={documentNumber}
-                  onChangeText={setDocumentNumber}
-                  placeholder="Document number"
-                  placeholderTextColor={activeTheme.textMuted}
-                  autoCapitalize="characters"
-                  style={styles.input}
-                />
-              </View>
-            ) : null}
 
             {plans.map((plan) => (
               <View key={plan.id} style={[styles.planCard, plan.selected && styles.planCardSelected]}>
@@ -197,7 +155,7 @@ export default function CheckoutScreen() {
       {isLoading ? (
         <AuthProcessingScreen
           title="Completing test Paystack"
-          subtitle="We're confirming the instant booking and updating the chef request."
+          subtitle="We're confirming the booking and updating the chef request."
         />
       ) : null}
     </View>
@@ -278,24 +236,6 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     radioSelected: { backgroundColor: activeTheme.primaryDark, borderColor: activeTheme.primaryDark },
     planLine: { color: activeTheme.textMuted, fontSize: 11, lineHeight: 16, fontWeight: "700" },
     summaryText: { color: activeTheme.textMuted, fontSize: 12, lineHeight: 18, textAlign: "center" },
-    verificationCard: {
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      padding: theme.spacing.md,
-      gap: 8,
-      backgroundColor: activeTheme.warmSurface,
-    },
-    sectionTitle: { color: activeTheme.text, fontSize: 15, fontWeight: "900" },
-    input: {
-      minHeight: 48,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: activeTheme.border,
-      backgroundColor: activeTheme.surface,
-      paddingHorizontal: 12,
-      color: activeTheme.text,
-    },
     primaryButton: {
       minHeight: 56,
       borderRadius: theme.radius.pill,

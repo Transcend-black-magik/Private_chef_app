@@ -1,0 +1,5 @@
+project_id = "private-chef"
+
+[functions.foodAssistant]
+verify_jwt = true
+

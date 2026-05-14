@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import RoundedAvatar from "@/components/RoundedAvatar";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import { getUserByIdentifier } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { formatCurrency } from "@/lib/currency";
 import {
   acceptBookingAsCook,
@@ -177,25 +178,27 @@ export default function RequestsScreen() {
       return;
     }
 
+    const submittedAction = actionState;
+    const submittedNote = note;
+    const submittedAmount = amount;
+    setActionState(null);
+    setNote("");
+    setAmount("");
     setIsSubmitting(true);
     setError("");
 
     try {
-      if (actionState.type === "accept") {
-        await acceptBookingAsCook(actionState.booking.id, note);
-      } else if (actionState.type === "complete") {
-        await completeBookingAsCook(actionState.booking.id, note);
-      } else if (actionState.type === "counter") {
-        await counterBookingOfferAsCook(actionState.booking.id, amount, note);
+      if (submittedAction.type === "accept") {
+        await acceptBookingAsCook(submittedAction.booking.id, submittedNote);
+      } else if (submittedAction.type === "complete") {
+        await completeBookingAsCook(submittedAction.booking.id, submittedNote);
+      } else if (submittedAction.type === "counter") {
+        await counterBookingOfferAsCook(submittedAction.booking.id, submittedAmount, submittedNote);
       } else {
-        await declineBookingAsCook(actionState.booking.id, note);
+        await declineBookingAsCook(submittedAction.booking.id, submittedNote);
       }
-
-      setActionState(null);
-      setNote("");
-      setAmount("");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not update this request.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not update this request."));
     } finally {
       setIsSubmitting(false);
     }

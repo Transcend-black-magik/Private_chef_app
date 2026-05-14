@@ -22,6 +22,7 @@ import {
 } from "@/lib/auth-service";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import { type UserRole } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { getTheme, theme } from "@/theme/theme";
 
 export default function SignUpScreen() {
@@ -84,7 +85,7 @@ export default function SignUpScreen() {
 
       router.replace(getPostAuthRoute(result.user.role));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not create your account.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not create your account."));
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +118,7 @@ export default function SignUpScreen() {
 
       router.replace(getPostAuthRoute(result.user.role));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not complete Google sign-up.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not complete Google sign-up."));
     } finally {
       setIsSubmitting(false);
     }

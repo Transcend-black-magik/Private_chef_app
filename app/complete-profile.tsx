@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { getCurrentUserRecord, saveUserRecord, type StoredUser } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { detectLocationProfile, getDialCode } from "@/lib/location-phone";
 import { globalServiceAreas, mealCategories } from "@/lib/meal-data";
 import { getProfileCompletion } from "@/lib/profile-completion";
@@ -36,6 +38,9 @@ type FormState = {
   emergencyContactPhone: string;
   dietaryPreferences: string;
   householdNotes: string;
+  nutritionCredentials: string;
+  nutritionServices: string;
+  nutritionDisclaimer: string;
   bio: string;
   specialtiesText: string;
   yearsExperience: string;
@@ -58,6 +63,9 @@ function createFormState(user: StoredUser): FormState {
     emergencyContactPhone: user.emergencyContactPhone || "",
     dietaryPreferences: user.dietaryPreferences || "",
     householdNotes: user.householdNotes || "",
+    nutritionCredentials: user.nutritionCredentials || "",
+    nutritionServices: user.nutritionServices || "",
+    nutritionDisclaimer: user.nutritionDisclaimer || "",
     bio: user.bio || "",
     specialtiesText: user.specialtiesText || "",
     yearsExperience: user.yearsExperience || "",
@@ -198,6 +206,7 @@ export default function CompleteProfileScreen() {
   }
 
   async function handleSave() {
+    Keyboard.dismiss();
     setIsSaving(true);
     setError("");
 
@@ -213,7 +222,7 @@ export default function CompleteProfileScreen() {
         setPhotoBase64("");
       }
     } catch (photoError) {
-      setError(photoError instanceof Error ? photoError.message : "We could not upload your photo.");
+      setError(toSafeUserErrorMessage(photoError instanceof Error ? photoError.message : "", "We could not upload your photo."));
       setIsSaving(false);
       return;
     }
@@ -239,6 +248,9 @@ export default function CompleteProfileScreen() {
       emergencyContactPhone: emergencyPhone || undefined,
       dietaryPreferences: currentForm.dietaryPreferences.trim(),
       householdNotes: currentForm.householdNotes.trim(),
+      nutritionCredentials: isCook ? currentForm.nutritionCredentials.trim() : undefined,
+      nutritionServices: isCook ? currentForm.nutritionServices.trim() : undefined,
+      nutritionDisclaimer: isCook ? currentForm.nutritionDisclaimer.trim() : undefined,
       bio: isCook ? currentForm.bio.trim() : undefined,
       specialtiesText: isCook ? currentForm.specialtiesText.trim() : undefined,
       yearsExperience: isCook ? currentForm.yearsExperience.trim() : undefined,
@@ -254,7 +266,7 @@ export default function CompleteProfileScreen() {
       setUser(nextUser);
       setShowSuccess(true);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not save your profile.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not save your profile."));
     } finally {
       setIsSaving(false);
     }
@@ -560,6 +572,35 @@ export default function CompleteProfileScreen() {
                 );
               })}
             </View>
+            <View style={styles.sectionHeadingRow}>
+              <View style={styles.sectionIcon}>
+                <Ionicons name="nutrition-outline" size={18} color={activeTheme.primaryDark} />
+              </View>
+              <Text style={styles.sectionTitle}>Nutrition support</Text>
+            </View>
+            <TextInput
+              value={form.nutritionCredentials}
+              onChangeText={(value) => updateField("nutritionCredentials", value)}
+              placeholder="Nutrition credentials, certifications, or relevant experience"
+              placeholderTextColor={activeTheme.textMuted}
+              style={styles.input}
+            />
+            <TextInput
+              value={form.nutritionServices}
+              onChangeText={(value) => updateField("nutritionServices", value)}
+              placeholder="Nutrition services you can offer: gym meals, diabetic-friendly prep, family meal planning..."
+              placeholderTextColor={activeTheme.textMuted}
+              multiline
+              style={[styles.input, styles.textArea]}
+            />
+            <TextInput
+              value={form.nutritionDisclaimer}
+              onChangeText={(value) => updateField("nutritionDisclaimer", value)}
+              placeholder="Any boundaries: not medical advice, not a licensed dietitian, referral conditions..."
+              placeholderTextColor={activeTheme.textMuted}
+              multiline
+              style={[styles.input, styles.textArea]}
+            />
           </View>
         ) : null}
 
@@ -585,7 +626,7 @@ export default function CompleteProfileScreen() {
             <Text style={styles.successTitle}>Profile saved beautifully</Text>
             <Text style={styles.successBody}>
               {isCook && currentUser.cookVerification?.status !== "verified"
-                ? "Your details are saved. The next step is identity verification so explorers can trust your profile."
+                ? "Your details are saved. The next step is platform trust verification so explorers can trust your profile."
                 : "Your profile details are ready across the app."}
             </Text>
             <Pressable
@@ -598,7 +639,7 @@ export default function CompleteProfileScreen() {
             >
               <Text style={styles.successButtonText}>
                 {isCook && currentUser.cookVerification?.status !== "verified"
-                  ? "Start identity check"
+                  ? "Verify profile"
                   : "Done"}
               </Text>
             </Pressable>

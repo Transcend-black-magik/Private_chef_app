@@ -1,17 +1,6 @@
-import {
-  getDatabase,
-  get,
-  off,
-  onDisconnect,
-  onValue,
-  ref,
-  serverTimestamp,
-  set,
-} from "firebase/database";
-
 import { toSafeFieldKey, uniqueStrings } from "@/lib/account-identity";
 import type { UserSession, StoredUser } from "@/lib/app-state";
-import { firebaseApp, firebaseConfig } from "@/lib/firebase";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 type PresenceAccount = Pick<UserSession, "id" | "email" | "role" | "name"> &
   Partial<Pick<StoredUser, "photoUrl">>;
@@ -23,85 +12,41 @@ export type PresenceState = {
   role?: "explorer" | "cook";
 };
 
-const databaseUrl =
-  process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL ||
-  (firebaseConfig.projectId ? `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com` : "");
-
-function getPresenceDatabase() {
-  if (!firebaseApp || !databaseUrl) {
-    return null;
-  }
-
-  return getDatabase(firebaseApp, databaseUrl);
-}
-
-function presenceRef(identifier: string) {
-  const database = getPresenceDatabase();
-
-  if (!database) {
-    return null;
-  }
-
-  return ref(database, `presence/${toSafeFieldKey(identifier)}`);
-}
+const localPresenceState: Record<string, PresenceState> = {};
 
 export function startPresenceTracking(account: PresenceAccount | null | undefined) {
-  const database = getPresenceDatabase();
-
-  if (!database || !account) {
+  if (!supabaseConfigured || !account?.id?.trim()) {
     return () => undefined;
   }
 
-  const identifiers = account.id?.trim() ? [account.id.trim()] : [];
+  const identifier = toSafeFieldKey(account.id.trim());
+  const channel = supabase.channel(`presence:${identifier}`, {
+    config: { presence: { key: identifier } },
+  });
 
-  if (!identifiers.length) {
-    return () => undefined;
-  }
+  const state: PresenceState = {
+    isOnline: true,
+    lastChangedAt: Date.now(),
+    name: account.name,
+    role: account.role,
+  };
 
-  const connectedRef = ref(database, ".info/connected");
-  const cleanupCallbacks: Array<() => void> = [];
+  localPresenceState[identifier] = state;
 
-  const unsubscribe = onValue(connectedRef, (snapshot) => {
-    if (snapshot.val() !== true) {
-      return;
+  void channel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      await channel.track(state);
     }
-
-    identifiers.forEach((identifier) => {
-      const nextPresenceRef = presenceRef(identifier);
-
-      if (!nextPresenceRef) {
-        return;
-      }
-
-      void onDisconnect(nextPresenceRef).set({
-        isOnline: false,
-        lastChangedAt: serverTimestamp(),
-        name: account.name,
-        role: account.role,
-      });
-
-      void set(nextPresenceRef, {
-        isOnline: true,
-        lastChangedAt: serverTimestamp(),
-        name: account.name,
-        role: account.role,
-      });
-
-      cleanupCallbacks.push(() => {
-        void set(nextPresenceRef, {
-          isOnline: false,
-          lastChangedAt: serverTimestamp(),
-          name: account.name,
-          role: account.role,
-        });
-      });
-    });
   });
 
   return () => {
-    off(connectedRef);
-    unsubscribe();
-    cleanupCallbacks.forEach((callback) => callback());
+    localPresenceState[identifier] = {
+      ...state,
+      isOnline: false,
+      lastChangedAt: Date.now(),
+    };
+    void channel.untrack();
+    void supabase.removeChannel(channel);
   };
 }
 
@@ -109,66 +54,39 @@ export function subscribeToPresence(
   identifiers: string[],
   callback: (presence: Record<string, PresenceState>) => void,
 ) {
-  const database = getPresenceDatabase();
-
-  if (!database) {
+  if (!supabaseConfigured) {
     callback({});
     return () => undefined;
   }
 
-  const uniqueIdentifiers = uniqueStrings(identifiers);
-  const state: Record<string, PresenceState> = {};
-  const unsubscribeCallbacks = uniqueIdentifiers.map((identifier) => {
-    const nextPresenceRef = presenceRef(identifier);
+  const uniqueIdentifiers = uniqueStrings(identifiers).map(toSafeFieldKey);
+  const channel = supabase.channel(`presence-watch:${uniqueIdentifiers.join(":")}`);
 
-    if (!nextPresenceRef) {
-      return () => undefined;
-    }
+  const emit = () => {
+    const presenceState = channel.presenceState<PresenceState>();
+    const nextPresence = uniqueIdentifiers.reduce<Record<string, PresenceState>>((accumulator, identifier) => {
+      const remoteState = presenceState[identifier]?.[0];
+      const localState = localPresenceState[identifier];
 
-    return onValue(nextPresenceRef, (snapshot) => {
-      const nextValue = snapshot.val() as PresenceState | null;
-
-      if (nextValue) {
-        state[identifier] = nextValue;
-      } else {
-        delete state[identifier];
+      if (remoteState || localState) {
+        accumulator[identifier] = remoteState || localState;
       }
 
-      callback({ ...state });
-    });
-  });
+      return accumulator;
+    }, {});
 
-  callback({ ...state });
+    callback(nextPresence);
+  };
+
+  channel.on("presence", { event: "sync" }, emit).subscribe();
+  emit();
 
   return () => {
-    unsubscribeCallbacks.forEach((unsubscribe) => unsubscribe());
+    void supabase.removeChannel(channel);
   };
 }
 
 export async function isAnyAccountIdentifierOnline(identifiers: string[]) {
-  const uniqueIdentifiers = uniqueStrings(identifiers);
-
-  if (!uniqueIdentifiers.length) {
-    return false;
-  }
-
-  const snapshots = await Promise.all(
-    uniqueIdentifiers.map(async (identifier) => {
-      const nextPresenceRef = presenceRef(identifier);
-      if (!nextPresenceRef) {
-        return null;
-      }
-
-      try {
-        return await get(nextPresenceRef);
-      } catch {
-        return null;
-      }
-    }),
-  );
-
-  return snapshots.some((snapshot) => {
-    const value = snapshot?.val() as PresenceState | null | undefined;
-    return Boolean(value?.isOnline);
-  });
+  const uniqueIdentifiers = uniqueStrings(identifiers).map(toSafeFieldKey);
+  return uniqueIdentifiers.some((identifier) => localPresenceState[identifier]?.isOnline);
 }

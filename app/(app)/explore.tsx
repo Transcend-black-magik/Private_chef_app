@@ -59,7 +59,7 @@ export default function ExploreScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [directory, setDirectory] = useState<CookDirectoryRecord[]>([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true);
-  const [profilePercent, setProfilePercent] = useState(0);
+  const [profilePercent, setProfilePercent] = useState<number | null>(null);
   const [explorerContext, setExplorerContext] = useState(() => getExplorerContext(null));
   const [savedDishIds, setSavedDishIds] = useState<string[]>([]);
   const [savedFeaturedCookIds, setSavedFeaturedCookIds] = useState<string[]>([]);
@@ -74,8 +74,8 @@ export default function ExploreScreen() {
         getSavedCookIds(),
       ]);
 
+      setProfilePercent(user ? getProfileCompletion(user).percent : 100);
       if (user) {
-        setProfilePercent(getProfileCompletion(user).percent);
         setExplorerContext(getExplorerContext(user));
       }
 
@@ -89,20 +89,10 @@ export default function ExploreScreen() {
   }, []);
 
   const popularCooks = useMemo(() => sortCooks(directory, "popular"), [directory]);
-  const featuredCook = popularCooks[0] ?? null;
   const featuredCooks = popularCooks.slice(0, 4);
   const quickMatches = popularCooks.slice(0, 5);
-  const previewCook = featuredCook ?? {
-    id: "preview",
-    name: "Amaka's Kitchen",
-    headline: "Warm bowls, family trays, and quiet handoff meals around your area.",
-    location: explorerContext.cityLabel,
-    specialties: ["Jollof", "Meal prep"],
-    verified: true,
-    profilePercent: 100,
-    serviceAreaLabel: explorerContext.cityLabel,
-    user: { photoUrl: "" },
-  };
+  const formatCookRating = (cook: CookDirectoryRecord) =>
+    cook.ratingCount > 0 ? cook.ratingAverage.toFixed(1) : "New";
   const logoOpacity = scrollY.interpolate({
     inputRange: [220, 285],
     outputRange: [0, 1],
@@ -178,7 +168,7 @@ export default function ExploreScreen() {
         ))}
       </View>
 
-      {profilePercent < 100 ? (
+      {profilePercent !== null && profilePercent < 100 ? (
         <Pressable style={styles.progressCard} onPress={() => router.push("/complete-profile")}>
           <Image source={heroFoodImages.assistant} style={styles.progressImage} contentFit="cover" />
           <View style={styles.progressImageShade} />
@@ -319,14 +309,12 @@ export default function ExploreScreen() {
         overScrollMode="never"
         contentContainerStyle={styles.featureRow}
       >
-        {(featuredCooks.length ? featuredCooks : [previewCook]).map((cook, index) => (
+        {featuredCooks.map((cook, index) => (
           <Pressable
             key={cook.id}
             style={styles.featureCard}
             onPress={() =>
-              cook.id === "preview"
-                ? router.push("/search")
-                : router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
+              router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
             }
           >
             <Image source={getCookImage(index + cook.name.length)} style={styles.featureImage} contentFit="cover" />
@@ -334,15 +322,13 @@ export default function ExploreScreen() {
             <View style={styles.featureTop}>
               <View style={styles.ratingPill}>
                 <Ionicons name="star" size={14} color="#FFCA45" />
-                <Text style={styles.ratingText}>4.{9 - (index % 3)}</Text>
+                <Text style={styles.ratingText}>{formatCookRating(cook)}</Text>
               </View>
               <Pressable
                 style={styles.heartButton}
                 onPress={(event) => {
                   event.stopPropagation();
-                  if (cook.id !== "preview") {
-                    void handleToggleSavedFeaturedCook(cook.id);
-                  }
+                  void handleToggleSavedFeaturedCook(cook.id);
                 }}
               >
                 <Ionicons
@@ -372,6 +358,13 @@ export default function ExploreScreen() {
           </Pressable>
         ))}
       </Animated.ScrollView>
+      {!isLoadingDirectory && !featuredCooks.length ? (
+        <Pressable style={styles.emptyCookPanel} onPress={() => router.push("/search" as never)}>
+          <Ionicons name="restaurant-outline" size={20} color={activeTheme.primaryDark} />
+          <Text style={styles.emptyCookTitle}>No verified cooks are live yet</Text>
+          <Text style={styles.emptyCookBody}>Once cooks complete profile details and verification, they will appear here.</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.sectionHeader}>
         <View>
@@ -416,14 +409,12 @@ export default function ExploreScreen() {
         showsHorizontalScrollIndicator={false}
                 bounces={false}
                 overScrollMode="never" contentContainerStyle={styles.cookRow}>
-        {(quickMatches.length ? quickMatches : [previewCook]).map((cook, index) => (
+        {quickMatches.map((cook, index) => (
           <Pressable
             key={cook.id}
             style={styles.cookCard}
             onPress={() =>
-              cook.id === "preview"
-                ? router.push("/search")
-                : router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
+              router.push({ pathname: "/cooks/[id]", params: { id: cook.id } })
             }
           >
             <Image source={getCookImage(index)} style={styles.cookImage} contentFit="cover" />
@@ -436,7 +427,7 @@ export default function ExploreScreen() {
               />
               <View style={styles.smallRating}>
                 <Ionicons name="star" size={12} color="#FFCA45" />
-                <Text style={styles.smallRatingText}>4.{9 - (index % 3)}</Text>
+                <Text style={styles.smallRatingText}>{formatCookRating(cook)}</Text>
               </View>
             </View>
             <Text numberOfLines={1} style={styles.cookName}>{cook.name}</Text>
@@ -446,9 +437,7 @@ export default function ExploreScreen() {
               <Pressable
                 style={styles.bookButton}
                 onPress={() =>
-                  cook.id === "preview"
-                    ? router.push("/search")
-                    : router.push({ pathname: "/booking-request", params: { cookId: cook.id } })
+                  router.push({ pathname: "/booking-request", params: { cookId: cook.id } })
                 }
               >
                 <Ionicons name="add" size={18} color="#FFFFFF" />
@@ -457,6 +446,13 @@ export default function ExploreScreen() {
           </Pressable>
         ))}
       </Animated.ScrollView>
+      {!isLoadingDirectory && !quickMatches.length ? (
+        <View style={styles.emptyCookPanel}>
+          <Ionicons name="people-outline" size={20} color={activeTheme.primaryDark} />
+          <Text style={styles.emptyCookTitle}>Cook discovery is waiting on real profiles</Text>
+          <Text style={styles.emptyCookBody}>Ask cooks to complete their profile, service area, categories, nutrition support, and verification.</Text>
+        </View>
+      ) : null}
 
       <View style={styles.companionCard}>
         <View style={styles.assistantHeroImageWrap}>
@@ -1081,6 +1077,18 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>, isWideWeb: boole
       alignItems: "center",
     },
     smallRatingText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+    emptyCookPanel: {
+      minHeight: 112,
+      borderRadius: 26,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      padding: theme.spacing.lg,
+      gap: 8,
+      justifyContent: "center",
+    },
+    emptyCookTitle: { color: activeTheme.text, fontSize: 16, fontWeight: "900" },
+    emptyCookBody: { color: activeTheme.textMuted, fontSize: 13, lineHeight: 20, fontWeight: "700" },
     cookName: { color: activeTheme.text, fontSize: 18, fontWeight: "900" },
     cookMeta: { color: activeTheme.textMuted, fontSize: 13, fontWeight: "700" },
     cookFooter: {

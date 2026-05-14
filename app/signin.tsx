@@ -21,6 +21,7 @@ import {
   signInWithEmail,
 } from "@/lib/auth-service";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { getTheme, theme } from "@/theme/theme";
 
 export default function SignInScreen() {
@@ -73,7 +74,7 @@ export default function SignInScreen() {
 
       router.replace(getPostAuthRoute(result.user.role));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not sign you in.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not sign you in."));
     } finally {
       setIsSubmitting(false);
     }
@@ -106,7 +107,7 @@ export default function SignInScreen() {
 
       router.replace(getPostAuthRoute(result.user.role));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not complete Google sign-in.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not complete Google sign-in."));
     } finally {
       setIsSubmitting(false);
     }

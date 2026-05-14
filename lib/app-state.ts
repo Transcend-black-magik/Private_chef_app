@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { addDoc, collection, getFirestore, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, getSupabaseStore, serverTimestamp } from "@/lib/supabase-store";
 
-import { fetchUserRecordByEmail, fetchUserRecordById, syncUserRecordToFirebase } from "@/lib/firebase-data";
-import { firebaseApp, firebaseAuth, waitForFirebaseAuthReady } from "@/lib/firebase";
+import { fetchUserRecordByEmail, fetchUserRecordById, syncUserRecordToSupabase } from "@/lib/supabase-data";
+import { supabase, supabaseConfigured, waitForSupabaseAuthReady } from "@/lib/supabase";
+import { sendPushNotificationViaRelay } from "@/lib/push-relay";
 
 export type UserRole = "explorer" | "cook";
 export type AuthProvider = "email" | "google" | "apple";
@@ -40,10 +41,10 @@ export type ActiveDeviceSession = {
 };
 
 export type StoredUser = UserSession & {
-  password?: string;
   phoneCountryCode?: string;
   phoneNationalNumber?: string;
   photoUrl?: string;
+  expoPushTokens?: string[];
   savedCookIds?: string[];
   recommendationConsent?: boolean;
   behaviorInsightsConsent?: boolean;
@@ -70,6 +71,9 @@ export type StoredUser = UserSession & {
   emergencyContactPhone?: string;
   householdNotes?: string;
   dietaryPreferences?: string;
+  nutritionCredentials?: string;
+  nutritionServices?: string;
+  nutritionDisclaimer?: string;
   bio?: string;
   specialtiesText?: string;
   yearsExperience?: string;
@@ -78,12 +82,14 @@ export type StoredUser = UserSession & {
   availableMealCategories?: string[];
   safetyPractices?: string;
   cookVerification?: CookVerification | null;
+  ratingAverage?: number;
+  ratingCount?: number;
   createdAt: string;
   updatedAt: string;
 };
 
-const ONBOARDING_KEY = "cook-for-me:onboarding-seen";
-const ACTIVE_SESSION_KEY = "cook-for-me:active-session-id";
+const ONBOARDING_KEY = "private-chef:onboarding-seen";
+const ACTIVE_SESSION_KEY = "private-chef:active-session-id";
 export const MAX_ACTIVE_DEVICE_SESSIONS = 3;
 export const DEVICE_LIMIT_MESSAGE =
   "This account is already signed in on 3 devices. Log out on one previous device before signing in here. If you no longer have that device, reset your password or use the account recovery sign-out link when it is available, then try again.";
@@ -93,17 +99,17 @@ async function createAccountActivityNotification(params: {
   title: string;
   body: string;
 }) {
-  const firestore = firebaseApp ? getFirestore(firebaseApp) : null;
+  const store = getSupabaseStore();
 
-  if (!firestore || !params.recipientId.trim()) {
+  if (!store || !params.recipientId.trim()) {
     return;
   }
 
   try {
-    await addDoc(collection(firestore, "notifications"), {
+    const notificationRef = await addDoc(collection(store, "notifications"), {
       recipientId: params.recipientId,
       actorId: params.recipientId,
-      actorName: "Cook for Me",
+      actorName: "Private Chef",
       type: "account_activity",
       title: params.title,
       body: params.body,
@@ -111,6 +117,13 @@ async function createAccountActivityNotification(params: {
       threadId: "",
       read: false,
       createdAt: serverTimestamp(),
+    });
+    await sendPushNotificationViaRelay({
+      notificationId: notificationRef.id,
+      recipientId: params.recipientId,
+      title: params.title,
+      body: params.body,
+      type: "account_activity",
     });
   } catch {
     // Account activity alerts should not block session updates.
@@ -219,37 +232,38 @@ export async function clearSession() {
 
   await AsyncStorage.removeItem(ACTIVE_SESSION_KEY);
 
-  if (!firebaseAuth) {
+  if (!supabaseConfigured) {
     return;
   }
 
-  await firebaseAuth.signOut();
+  await supabase.auth.signOut();
 }
 
 export async function getSession() {
-  await waitForFirebaseAuthReady();
-  const currentUser = firebaseAuth?.currentUser;
+  await waitForSupabaseAuthReady();
+  const { data } = await supabase.auth.getUser();
+  const currentUser = data.user;
 
   if (!currentUser?.email) {
     return null;
   }
 
   const storedUser =
-    (await fetchUserRecordById(currentUser.uid)) ??
+    (await fetchUserRecordById(currentUser.id)) ??
     (await fetchUserRecordByEmail(currentUser.email));
 
   if (!storedUser) {
     return null;
   }
 
-  if (storedUser.id !== currentUser.uid) {
+  if (storedUser.id !== currentUser.id) {
     const alignedUser: StoredUser = {
       ...storedUser,
-      id: currentUser.uid,
+      id: currentUser.id,
       updatedAt: new Date().toISOString(),
     };
 
-    await syncUserRecordToFirebase(alignedUser);
+    await syncUserRecordToSupabase(alignedUser);
     return toSession(alignedUser);
   }
 
@@ -287,29 +301,30 @@ export async function getUserByIdentifier(identifier: string) {
 }
 
 export async function getCurrentUserRecord() {
-  await waitForFirebaseAuthReady();
-  const currentUser = firebaseAuth?.currentUser;
+  await waitForSupabaseAuthReady();
+  const { data } = await supabase.auth.getUser();
+  const currentUser = data.user;
 
   if (!currentUser) {
     return null;
   }
 
   const storedUser =
-    (await getUserById(currentUser.uid)) ??
+    (await getUserById(currentUser.id)) ??
     (currentUser.email ? await getUserByEmail(currentUser.email) : null);
 
   if (!storedUser) {
     return null;
   }
 
-  if (storedUser.id !== currentUser.uid) {
+  if (storedUser.id !== currentUser.id) {
     const alignedUser: StoredUser = {
       ...storedUser,
-      id: currentUser.uid,
+      id: currentUser.id,
       updatedAt: new Date().toISOString(),
     };
 
-    await syncUserRecordToFirebase(alignedUser);
+    await syncUserRecordToSupabase(alignedUser);
     return alignedUser;
   }
 
@@ -327,7 +342,7 @@ export async function saveUserRecord(user: StoredUser) {
     return;
   }
 
-  await syncUserRecordToFirebase(sanitizedUser);
+  await syncUserRecordToSupabase(sanitizedUser);
 }
 
 export async function getLaunchState() {
@@ -381,12 +396,20 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
     role,
     provider,
     profileComplete: Boolean(nextUser.profileComplete),
-    password: typeof nextUser.password === "string" ? nextUser.password : undefined,
     phoneCountryCode:
       typeof nextUser.phoneCountryCode === "string" ? nextUser.phoneCountryCode : undefined,
     phoneNationalNumber:
       typeof nextUser.phoneNationalNumber === "string" ? nextUser.phoneNationalNumber : undefined,
     photoUrl: typeof nextUser.photoUrl === "string" ? nextUser.photoUrl : undefined,
+    expoPushTokens: Array.isArray(nextUser.expoPushTokens)
+      ? Array.from(
+          new Set(
+            nextUser.expoPushTokens.filter(
+              (item): item is string => typeof item === "string" && item.trim().length > 0,
+            ),
+          ),
+        )
+      : undefined,
     savedCookIds: Array.isArray(nextUser.savedCookIds)
       ? nextUser.savedCookIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : undefined,
@@ -445,6 +468,12 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
       typeof nextUser.householdNotes === "string" ? nextUser.householdNotes : undefined,
     dietaryPreferences:
       typeof nextUser.dietaryPreferences === "string" ? nextUser.dietaryPreferences : undefined,
+    nutritionCredentials:
+      typeof nextUser.nutritionCredentials === "string" ? nextUser.nutritionCredentials : undefined,
+    nutritionServices:
+      typeof nextUser.nutritionServices === "string" ? nextUser.nutritionServices : undefined,
+    nutritionDisclaimer:
+      typeof nextUser.nutritionDisclaimer === "string" ? nextUser.nutritionDisclaimer : undefined,
     bio: typeof nextUser.bio === "string" ? nextUser.bio : undefined,
     specialtiesText:
       typeof nextUser.specialtiesText === "string" ? nextUser.specialtiesText : undefined,
@@ -462,6 +491,10 @@ function sanitizeStoredUser(raw: unknown): StoredUser | null {
     safetyPractices:
       typeof nextUser.safetyPractices === "string" ? nextUser.safetyPractices : undefined,
     cookVerification: sanitizeCookVerification(nextUser.cookVerification),
+    ratingAverage:
+      typeof nextUser.ratingAverage === "number" ? nextUser.ratingAverage : Number(nextUser.ratingAverage || 0),
+    ratingCount:
+      typeof nextUser.ratingCount === "number" ? nextUser.ratingCount : Number(nextUser.ratingCount || 0),
     createdAt:
       typeof nextUser.createdAt === "string" && nextUser.createdAt
         ? nextUser.createdAt

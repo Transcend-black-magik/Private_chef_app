@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
@@ -8,6 +8,10 @@ import AnimatedSplashScreen from "@/components/AnimatedSplashScreen";
 import AppBootScreen from "@/components/AppBootScreen";
 import { getSession } from "@/lib/app-state";
 import { startPresenceTracking } from "@/lib/presence";
+import {
+  listenForPushNotificationResponses,
+  registerCurrentDeviceForPushNotifications,
+} from "@/lib/push-notifications";
 import { getTheme } from "@/theme/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -46,11 +50,33 @@ export default function RootLayout() {
     async function trackPresence() {
       const session = await getSession();
       stopPresence = startPresenceTracking(session);
+      void registerCurrentDeviceForPushNotifications();
     }
 
     void trackPresence();
 
     return () => stopPresence();
+  }, [appReady, showAnimatedSplash]);
+
+  useEffect(() => {
+    if (!appReady || showAnimatedSplash) {
+      return;
+    }
+
+    const subscription = listenForPushNotificationResponses((data) => {
+      const threadId = typeof data.threadId === "string" ? data.threadId : "";
+      const bookingId = typeof data.bookingId === "string" ? data.bookingId : "";
+
+      if (threadId) {
+        router.push({ pathname: "/chat-thread/[id]", params: { id: threadId } });
+      } else if (bookingId) {
+        router.push({ pathname: "/booking-manage/[bookingId]", params: { bookingId } });
+      } else {
+        router.push("/notifications");
+      }
+    });
+
+    return () => subscription.remove();
   }, [appReady, showAnimatedSplash]);
 
   if (!appReady) {

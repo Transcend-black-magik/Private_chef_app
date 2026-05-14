@@ -14,7 +14,7 @@ const profileActions = [
   { title: "Saved cooks", icon: "heart-outline", route: "/saved-cooks" },
   { title: "Home address", icon: "home-outline", route: "/complete-profile" },
   { title: "Payment method", icon: "card-outline", route: "/bookings" },
-  { title: "Help and support", icon: "help-circle-outline", route: "/chats" },
+  { title: "Help and support", icon: "help-circle-outline", route: "/help-support" },
 ];
 
 const companionActions = [

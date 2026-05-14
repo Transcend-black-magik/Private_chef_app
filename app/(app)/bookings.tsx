@@ -15,6 +15,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { formatCurrency } from "@/lib/currency";
 import {
   acceptCounterOfferAsExplorer,
@@ -159,7 +160,7 @@ export default function BookingsScreen() {
 
       setActionState(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not update this booking.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not update this booking."));
     } finally {
       setIsSubmitting(false);
     }

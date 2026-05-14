@@ -55,16 +55,13 @@ export function isIdentityVerified(user?: Pick<StoredUser, "cookVerification"> |
 export function shouldRequireExplorerVerificationForOrder(
   user?: Pick<StoredUser, "role" | "cookVerification"> | null,
 ) {
-  return (
-    user?.role === "explorer" &&
-    (!user.cookVerification || user.cookVerification.status === "not_started")
-  );
+  return false;
 }
 
 export function getVerificationTrustCopy(role: "explorer" | "cook") {
   if (role === "cook") {
-    return "Cooks must complete identity review before they can earn strong trust in the app.";
+    return "Cooks receive a platform trust badge after completing the required profile fields.";
   }
 
-  return "Explorers verify before the first protected order so cooks can feel safer entering a home.";
+  return "Explorers receive platform trust after completing their profile and keeping activity inside the app.";
 }

@@ -206,18 +206,16 @@ export default function SearchScreen() {
         </View>
       ) : null}
 
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionCopy}>
-          <Text style={styles.sectionTitle}>
-            {activeQuery.trim() ? `Results for "${activeQuery.trim()}"` : "Start with a craving"}
-          </Text>
-          <Text style={styles.sectionSubtitle}>
-            {activeQuery.trim()
-              ? `${mealResults.length} meal ideas and ${cookResults.length} cooks matched your search.`
-              : `Type a dish or choose breakfast, lunch, or dinner for the next-page meal flow.`}
-          </Text>
+      {activeQuery.trim() ? (
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>{`Results for "${activeQuery.trim()}"`}</Text>
+            <Text style={styles.sectionSubtitle}>
+              {`${mealResults.length} meal ideas and ${cookResults.length} cooks matched your search.`}
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : null}
 
       <Text style={styles.listTitle}>{activeQuery.trim() ? "Matching meals" : "Meal ideas"}</Text>
 

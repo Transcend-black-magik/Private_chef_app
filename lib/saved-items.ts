@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const SAVED_MEAL_IDS_KEY = "cook-for-me:saved-meal-ids";
-const SAVED_RECIPE_IDS_KEY = "cook-for-me:saved-recipe-ids";
+const SAVED_MEAL_IDS_KEY = "private-chef:saved-meal-ids";
+const SAVED_RECIPE_IDS_KEY = "private-chef:saved-recipe-ids";
 
 function uniqueIds(ids: string[]) {
   return [...new Set(ids.map((item) => item.trim()).filter(Boolean))];

@@ -15,6 +15,7 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { fetchCookDirectory, getCookById, sortCooks, type CookDirectoryRecord } from "@/lib/cook-data";
 import { getCookImage } from "@/lib/food-visuals";
 import { getCurrentUserRecord, type StoredUser } from "@/lib/app-state";
@@ -163,7 +164,7 @@ export default function MealItemScreen() {
         params: { bookingId: result.bookingId, threadId: result.threadId, instant: "1" },
       } as never);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not create this instant match.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not create this instant match."));
     } finally {
       setIsCreatingBooking(false);
     }

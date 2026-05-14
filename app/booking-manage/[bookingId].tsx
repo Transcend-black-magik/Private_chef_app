@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import { subscribeToBookingsForCurrentUser, rescheduleBookingAsExplorer, type BookingRecord } from "@/lib/marketplace";
 import { getTheme, theme } from "@/theme/theme";
 
@@ -48,6 +50,7 @@ export default function BookingManageScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setIsSaving(true);
     setError("");
 
@@ -55,7 +58,7 @@ export default function BookingManageScreen() {
       await rescheduleBookingAsExplorer(params.bookingId, serviceDateLabel, note);
       router.replace("/bookings");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "We could not update this booking.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not update this booking."));
       setIsSaving(false);
       return;
     }

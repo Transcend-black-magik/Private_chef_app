@@ -21,6 +21,7 @@ import {
   getUserByIdentifier,
   type StoredUser,
 } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import {
   getThreadPartnerReadAt,
   markThreadAsRead,
@@ -134,7 +135,7 @@ export default function ChatThreadScreen() {
           }
         },
         (nextError) => {
-          setError(nextError.message);
+          setError(toSafeUserErrorMessage(nextError.message, "We could not load this conversation."));
         },
       );
 
@@ -144,7 +145,7 @@ export default function ChatThreadScreen() {
           setMessages(nextMessages);
         },
         (nextError) => {
-          setError(nextError.message);
+          setError(toSafeUserErrorMessage(nextError.message, "We could not load this conversation."));
         },
       );
     }
@@ -173,6 +174,10 @@ export default function ChatThreadScreen() {
   }, [currentUser, partnerUser, thread]);
 
   const chatItems = useMemo(() => buildChatListItems(messages), [messages]);
+
+  useEffect(() => {
+    scrollToLatest(messages.length < 8);
+  }, [messages.length]);
 
   useEffect(() => {
     if (!thread?.id || !currentUser) {
@@ -204,7 +209,7 @@ export default function ChatThreadScreen() {
       scrollToLatest(false);
     } catch (nextError) {
       setDraft(outgoingDraft);
-      setError(nextError instanceof Error ? nextError.message : "We could not send that message.");
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not send that message."));
     }
   }
 

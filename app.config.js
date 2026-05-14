@@ -1,58 +1,28 @@
-const { existsSync, readFileSync } = require("fs");
-
-const androidGoogleServicesFile = "./firebase/google-services.json";
-const iosGoogleServicesFile = "./firebase/GoogleService-Info.plist";
-const googleIosUrlScheme =
-  process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME || readGoogleIosUrlScheme();
-
-function readGoogleIosUrlScheme() {
-  if (!existsSync(iosGoogleServicesFile)) {
-    return undefined;
-  }
-
-  try {
-    const plist = readFileSync(iosGoogleServicesFile, "utf8");
-    const match = plist.match(
-      /<key>REVERSED_CLIENT_ID<\/key>\s*<string>([^<]+)<\/string>/,
-    );
-
-    return match?.[1];
-  } catch {
-    return undefined;
-  }
-}
-
 /** @type {import('expo/config').ExpoConfig} */
 const config = {
-  name: "cook_for_me",
-  slug: "cook_for_me",
-  owner: "toxicdev01",
+  name: "Private Chef",
+  slug: "private-chef",
+  owner: "toxicdev08",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
-  scheme: "cookforme",
+  scheme: "privatechef",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.tega.cookforme",
-    ...(existsSync(iosGoogleServicesFile)
-      ? { googleServicesFile: iosGoogleServicesFile }
-      : {}),
+    bundleIdentifier: "com.tega.privatechef",
   },
   android: {
-    package: "com.tega.cookforme",
+    package: "com.tega.privatechef",
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      backgroundColor: "#F7EFE7",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    ...(existsSync(androidGoogleServicesFile)
-      ? { googleServicesFile: androidGoogleServicesFile }
-      : {}),
   },
   web: {
     output: "static",
@@ -61,11 +31,14 @@ const config = {
   plugins: [
     "expo-router",
     "expo-dev-client",
+    "expo-notifications",
     "expo-apple-authentication",
     "@react-native-community/datetimepicker",
     [
       "@react-native-google-signin/google-signin",
-      googleIosUrlScheme ? { iosUrlScheme: googleIosUrlScheme } : {},
+      process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME
+        ? { iosUrlScheme: process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME }
+        : {},
     ],
     [
       "expo-location",
@@ -94,7 +67,7 @@ const config = {
   },
   extra: {
     eas: {
-      projectId: "0bb2f636-e237-4e20-a7cb-63586a5fa53c",
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || "c3bed50e-c32c-4036-b3be-92813480423c",
     },
   },
 };

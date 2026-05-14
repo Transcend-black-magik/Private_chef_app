@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,12 +21,11 @@ import { Image } from "expo-image";
 import AuthProcessingScreen from "@/components/AuthProcessingScreen";
 import LogoLoadingScreen from "@/components/LogoLoadingScreen";
 import { getCurrentUserRecord } from "@/lib/app-state";
+import { toSafeUserErrorMessage } from "@/lib/async-guard";
 import type { CookDirectoryRecord } from "@/lib/cook-data";
 import { formatCurrency } from "@/lib/currency";
 import { getCookImage, heroFoodImages } from "@/lib/food-visuals";
 import {
-  COOK_FEE_RATE,
-  COMMISSION_RATE,
   createBookingRequest,
   fetchCookForBookingRequest,
   serviceKindLabel,
@@ -58,6 +60,8 @@ export default function BookingRequestScreen() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [countryCode, setCountryCode] = useState("US");
+  const [activeStep, setActiveStep] = useState(0);
+  const stepMotion = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     async function loadCook() {
@@ -78,6 +82,16 @@ export default function BookingRequestScreen() {
 
     void loadCook();
   }, [params.cookId, params.dish]);
+
+  useEffect(() => {
+    stepMotion.setValue(0);
+    Animated.timing(stepMotion, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [activeStep, stepMotion]);
 
   const bookingDateSummary = useMemo(() => {
     if (!serviceDate) {
@@ -156,12 +170,14 @@ export default function BookingRequestScreen() {
   const ingredientBudgetPreview = ingredientBudgetInput.trim()
     ? Number.parseFloat(ingredientBudgetInput)
     : 0;
-  const explorerFeePreview = subtotalInput.trim() ? subtotalPreview * (COMMISSION_RATE - COOK_FEE_RATE) : 0;
-  const cookFeePreview = subtotalInput.trim() ? subtotalPreview * COOK_FEE_RATE : 0;
-  const feePreview = explorerFeePreview + cookFeePreview;
-  const totalPreview = subtotalPreview + ingredientBudgetPreview + explorerFeePreview;
+  const totalPreview = subtotalPreview + ingredientBudgetPreview + (subtotalInput.trim() ? subtotalPreview * 0.1 : 0);
+  const stepTranslateY = stepMotion.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
 
   async function handleSubmit() {
+    Keyboard.dismiss();
     setIsSubmitting(true);
     setError("");
 
@@ -190,11 +206,7 @@ export default function BookingRequestScreen() {
         params: { bookingId: result.bookingId, threadId: result.threadId },
       });
     } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "We could not create this booking request.",
-      );
+      setError(toSafeUserErrorMessage(nextError instanceof Error ? nextError.message : "", "We could not create this booking request."));
     } finally {
       setIsSubmitting(false);
     }
@@ -205,6 +217,9 @@ export default function BookingRequestScreen() {
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={18} color="#171713" />
+      </Pressable>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.content}
@@ -216,9 +231,6 @@ export default function BookingRequestScreen() {
         <View style={styles.headerBlock}>
           <Image source={heroFoodImages.platter} style={styles.headerImage} contentFit="cover" />
           <View style={styles.headerShade} />
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={18} color="#171713" />
-          </Pressable>
           <View style={styles.heroContent}>
             <View style={styles.heroPill}>
               <Ionicons name="shield-checkmark-outline" size={14} color="#FFFFFF" />
@@ -244,23 +256,18 @@ export default function BookingRequestScreen() {
           </View>
         </View>
 
-        <View style={styles.progressRow}>
-          <View style={styles.progressStep}>
-            <Text style={styles.progressStepNumber}>1</Text>
-            <Text style={styles.progressStepLabel}>Basics</Text>
-          </View>
-          <View style={styles.progressStep}>
-            <Text style={styles.progressStepNumber}>2</Text>
-            <Text style={styles.progressStepLabel}>Service</Text>
-          </View>
-          <View style={styles.progressStep}>
-            <Text style={styles.progressStepNumber}>3</Text>
-            <Text style={styles.progressStepLabel}>Preferences</Text>
-          </View>
-          <View style={styles.progressStep}>
-            <Text style={styles.progressStepNumber}>4</Text>
-            <Text style={styles.progressStepLabel}>Budget</Text>
-          </View>
+        <View style={styles.stepRail}>
+          {["Details", "Service", "Taste", "Budget"].map((label, index) => (
+            <Pressable
+              key={label}
+              style={[styles.stepPill, activeStep === index && styles.stepPillActive]}
+              onPress={() => setActiveStep(index)}
+            >
+              <Text style={[styles.stepPillText, activeStep === index && styles.stepPillTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         <View style={styles.overviewRow}>
@@ -278,6 +285,16 @@ export default function BookingRequestScreen() {
           </View>
         </View>
 
+        <Animated.View
+          style={[
+            styles.stepScene,
+            {
+              opacity: stepMotion,
+              transform: [{ translateY: stepTranslateY }],
+            },
+          ]}
+        >
+        {activeStep === 0 ? (
         <View style={styles.card}>
           <Text style={styles.sectionKicker}>Step 1</Text>
           <Text style={styles.sectionTitle}>Request details</Text>
@@ -356,7 +373,9 @@ export default function BookingRequestScreen() {
             style={styles.input}
           />
         </View>
+        ) : null}
 
+        {activeStep === 1 ? (
         <View style={styles.card}>
           <Text style={styles.sectionKicker}>Step 2</Text>
           <Text style={styles.sectionTitle}>Choose the service setup</Text>
@@ -425,7 +444,9 @@ export default function BookingRequestScreen() {
             })}
           </View>
         </View>
+        ) : null}
 
+        {activeStep === 2 ? (
         <View style={styles.card}>
           <Text style={styles.sectionKicker}>Step 3</Text>
           <Text style={styles.sectionTitle}>Shape the food experience</Text>
@@ -496,7 +517,9 @@ export default function BookingRequestScreen() {
             style={[styles.input, styles.textArea]}
           />
         </View>
+        ) : null}
 
+        {activeStep === 3 ? (
         <View style={styles.card}>
           <Text style={styles.sectionKicker}>Step 4</Text>
           <Text style={styles.sectionTitle}>Set the working budget</Text>
@@ -519,48 +542,58 @@ export default function BookingRequestScreen() {
             />
           ) : null}
         </View>
+        ) : null}
 
+        {activeStep === 3 ? (
         <View style={styles.card}>
           <View style={styles.feeHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Price preview</Text>
-              <Text style={styles.feeHeaderSubtext}>Transparent before you send</Text>
+              <Text style={styles.sectionTitle}>You pay</Text>
+              <Text style={styles.feeHeaderSubtext}>The amount billed before your request is sent</Text>
             </View>
             <View style={styles.feeBadge}>
-              <Text style={styles.feeBadgeText}>10% + 10%</Text>
+              <Text style={styles.feeBadgeText}>Today</Text>
             </View>
           </View>
-          <Text style={styles.bodyText}>
-            The explorer carries a 10% service fee. The cook carries a 10% payout fee. Both stay inside the app so bookings, trust, and support remain protected.
-          </Text>
-          <Text style={styles.feeText}>
-            Cook subtotal: {formatCurrency(Number.isFinite(subtotalPreview) ? subtotalPreview : 0, countryCode)}
-          </Text>
-          {serviceKind !== "cook_only" ? (
-            <Text style={styles.feeText}>
-              Ingredient budget: {formatCurrency(Number.isFinite(ingredientBudgetPreview) ? ingredientBudgetPreview : 0, countryCode)}
+          <View style={styles.totalCard}>
+            <Text style={styles.totalAmount}>
+              {formatCurrency(Number.isFinite(totalPreview) ? totalPreview : 0, countryCode)}
             </Text>
-          ) : null}
-          <Text style={styles.feeText}>
-            Explorer fee: {formatCurrency(Number.isFinite(explorerFeePreview) ? explorerFeePreview : 0, countryCode)}
-          </Text>
-          <Text style={styles.feeText}>
-            Cook fee: {formatCurrency(Number.isFinite(cookFeePreview) ? cookFeePreview : 0, countryCode)}
-          </Text>
-          <Text style={styles.feeText}>
-            Platform fee: {formatCurrency(Number.isFinite(feePreview) ? feePreview : 0, countryCode)}
-          </Text>
-          <Text style={styles.feeText}>
-            Estimated total: {formatCurrency(Number.isFinite(totalPreview) ? totalPreview : 0, countryCode)}
-          </Text>
+            <Text style={styles.totalBody}>
+              Includes your selected cook amount{serviceKind !== "cook_only" ? " and ingredient budget" : ""}.
+            </Text>
+          </View>
         </View>
+        ) : null}
+        </Animated.View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Pressable style={styles.primaryButton} onPress={() => void handleSubmit()}>
-          <Text style={styles.primaryButtonText}>Send booking request</Text>
-          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-        </Pressable>
+        <View style={styles.wizardFooter}>
+          <Pressable
+            style={[styles.footerButton, activeStep === 0 && styles.footerButtonDisabled]}
+            disabled={activeStep === 0}
+            onPress={() => setActiveStep((value) => Math.max(0, value - 1))}
+          >
+            <Ionicons name="arrow-back" size={17} color={activeTheme.text} />
+            <Text style={styles.footerButtonText}>Back</Text>
+          </Pressable>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => {
+              if (activeStep < 3) {
+                setActiveStep((value) => Math.min(3, value + 1));
+              } else {
+                void handleSubmit();
+              }
+            }}
+          >
+            <Text style={styles.primaryButtonText}>
+              {activeStep < 3 ? "Continue" : "Send booking request"}
+            </Text>
+            <Ionicons name={activeStep < 3 ? "arrow-forward" : "checkmark"} size={18} color="#FFFFFF" />
+          </Pressable>
+        </View>
       </ScrollView>
 
       {isSubmitting ? (
@@ -588,7 +621,8 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       position: "absolute",
       top: theme.layout.screenTop - 8,
       left: theme.spacing.lg,
-      zIndex: 3,
+      zIndex: 40,
+      elevation: 40,
       width: 42,
       height: 42,
       borderRadius: 21,
@@ -662,10 +696,38 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       backgroundColor: activeTheme.surfaceElevated,
     },
     cookTrustText: { color: activeTheme.text, fontSize: 12, fontWeight: "900" },
-    progressRow: {
+    stepRail: {
       marginHorizontal: theme.spacing.lg,
       flexDirection: "row",
       gap: 10,
+    },
+    stepPill: {
+      flex: 1,
+      minHeight: 42,
+      borderRadius: theme.radius.pill,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+      paddingHorizontal: 8,
+    },
+    stepPillActive: {
+      backgroundColor: activeTheme.primaryDark,
+      borderColor: activeTheme.primaryDark,
+      shadowColor: activeTheme.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
+    },
+    stepPillText: {
+      color: activeTheme.textMuted,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    stepPillTextActive: {
+      color: "#FFFFFF",
     },
     overviewRow: {
       marginHorizontal: theme.spacing.lg,
@@ -710,6 +772,9 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
       justifyContent: "center",
       gap: 4,
       paddingHorizontal: 6,
+    },
+    stepScene: {
+      gap: theme.spacing.md,
     },
     progressStepNumber: {
       color: activeTheme.primaryDark,
@@ -839,9 +904,48 @@ const createStyles = (activeTheme: ReturnType<typeof getTheme>) =>
     },
     feeBadgeText: { color: activeTheme.primaryDark, fontSize: 11, fontWeight: "900" },
     feeText: { color: activeTheme.text, fontSize: 15, lineHeight: 21, fontWeight: "900" },
+    totalCard: {
+      borderRadius: 24,
+      backgroundColor: activeTheme.primaryDark,
+      padding: theme.spacing.lg,
+      gap: 8,
+    },
+    totalAmount: {
+      color: "#FFFFFF",
+      fontSize: 36,
+      lineHeight: 42,
+      fontWeight: "900",
+    },
+    totalBody: { color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 21, fontWeight: "700" },
     errorText: { color: activeTheme.danger, fontSize: 13, lineHeight: 20 },
-    primaryButton: {
+    wizardFooter: {
       marginHorizontal: theme.spacing.lg,
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center",
+    },
+    footerButton: {
+      minHeight: 54,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      backgroundColor: activeTheme.surface,
+      borderWidth: 1,
+      borderColor: activeTheme.border,
+    },
+    footerButtonDisabled: {
+      opacity: 0.36,
+    },
+    footerButtonText: {
+      color: activeTheme.text,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+    primaryButton: {
+      flex: 1,
       minHeight: 56,
       borderRadius: theme.radius.pill,
       backgroundColor: activeTheme.primaryDark,
